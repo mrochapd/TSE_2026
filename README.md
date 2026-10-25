@@ -11,7 +11,9 @@ Três abas:
   pintado pela cor de quem está à frente em cada estado.
 - **Estados**: escolha o estado e, se quiser, o município e a zona eleitoral para ver os votos de cada um.
   O mapa mostra os municípios do estado (malha do IBGE) e a tabela lista municípios ou zonas.
-- **Exterior**: votos de quem vota fora do país, por cidade e zona.
+- **Exterior**: abre direto na apuração total do exterior. Para ver um país, escolha-o no seletor
+  (o total do país é a soma das suas cidades); depois dá para escolher a cidade e a zona. O TSE publica o
+  exterior por cidade, e `js/exterior.js` diz a que país pertence cada cidade.
 
 Funciona no celular (iPhone/iOS e Android) e no computador, com tema claro/escuro. Pode ser adicionado à tela
 de início do celular como um aplicativo. Os dados se atualizam sozinhos a cada 30 segundos, e cada tela tem

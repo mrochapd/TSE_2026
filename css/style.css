@@ -253,7 +253,6 @@ h2 { font-size: 1.25rem; margin: 0; }
 .dica-aba { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--realce); border: 1px solid var(--linha); font-size: .9rem; color: var(--texto-2); text-align: center; }
 .link { border: 0; background: none; padding: 0; color: var(--flavio); font-weight: 700; text-decoration: underline; cursor: pointer; font-size: inherit; }
 .mapa-carregando { font-size: .85rem; color: var(--texto-2); margin: 10px 0 0; text-align: center; }
-.lista-exterior { display: grid; gap: 6px; }
 
 /* ---------- Tabela ---------- */
 .tabela-cabecalho { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }

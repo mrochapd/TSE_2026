@@ -146,7 +146,7 @@
       nome: titulo(u.ds || u.nm || u.cd),
       mu: (Array.isArray(u.mu) ? u.mu : []).map(m => ({
         cd: String(m.cd), cdi: m.cdi ? String(m.cdi) : null, nome: titulo(m.nm || m.cd),
-        capital: m.c === 'S', zonas: (Array.isArray(m.z) ? m.z : []).map(z => String(z).padStart(4, '0'))
+        capital: m.c === 'S', pais: m.pais || m.nmp || m.nmpais || m.ps || null, zonas: (Array.isArray(m.z) ? m.z : []).map(z => String(z).padStart(4, '0'))
       })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     })).filter(u => u.cd);
   }
