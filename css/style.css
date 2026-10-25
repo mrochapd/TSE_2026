@@ -119,8 +119,9 @@ h2 { font-size: 1.25rem; margin: 0; }
 
 /* ---------- Seletor ---------- */
 .seletor { display: grid; gap: 14px; }
-.abas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--realce); padding: 5px; border-radius: 12px; border: 1px solid var(--linha); }
+.abas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; background: var(--realce); padding: 5px; border-radius: 12px; border: 1px solid var(--linha); }
 .aba {
+  min-width: 0; white-space: nowrap;
   border: 0; background: transparent; padding: 10px 8px; border-radius: 9px; cursor: pointer;
   font-weight: 600; color: var(--texto-2); display: flex; align-items: center; justify-content: center; gap: 6px;
 }
@@ -323,6 +324,12 @@ h2 { font-size: 1.25rem; margin: 0; }
   .mapa-area { grid-template-columns: 1fr; }
   .mapa-placar { grid-template-columns: 1fr 1fr; }
 }
+/* 4 abas no celular: sem o ícone e com letra um pouco menor */
+@media (max-width: 520px) {
+  .abas { gap: 4px; padding: 4px; }
+  .aba { font-size: .88rem; padding: 10px 2px; }
+  .aba span { display: none; }
+}
 @media (max-width: 400px) {
   .status-rotulo { display: none; }
   .tabela th:nth-child(5), .tabela td:nth-child(5) { display: none; }
@@ -334,8 +341,7 @@ h2 { font-size: 1.25rem; margin: 0; }
 @media (max-width: 360px) {
   .marca h1 { font-size: 1rem; }
   .marca-icone { width: 26px; height: 26px; }
-  .aba { font-size: .9rem; padding: 10px 4px; }
-  .aba span { display: none; }
+  .aba { padding: 10px 1px; font-size: .8rem; }
   .numeros dd { font-size: .92rem; }
 }
 @media (max-width: 640px) {

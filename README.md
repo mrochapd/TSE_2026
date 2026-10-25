@@ -10,6 +10,8 @@ Três abas:
   Lula (vermelho) à esquerda e Flávio (azul) à direita, fotos com o percentual de cada um e um mapa que alterna
   entre **Brasil** (estados) e **Mundo** (o Brasil e cada país com eleitores brasileiros), pintado pela cor de quem
   está à frente.
+- **Regiões**: mapa e lista das cinco regiões (Norte, Nordeste, Centro-Oeste, Sudeste e Sul). Escolhendo uma
+  região aparece o percentual de cada candidato nela, que é a soma dos seus estados, e a lista desses estados.
 - **Estados**: escolha o estado e, se quiser, o município e a zona eleitoral para ver os votos de cada um.
   O mapa mostra os municípios do estado (malha do IBGE) e a tabela lista municípios ou zonas.
 - **Exterior**: abre na apuração total do exterior, com o mapa-múndi pintado país a país. Tocando num país (ou

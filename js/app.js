@@ -9,7 +9,7 @@
 
   const S = {
     ufs: [],             // configuração: [{cd, nome, mu:[{cd, cdi, nome, capital, zonas}]}]
-    sel: { uf: null, pais: null, mu: null, zona: null },
+    sel: { uf: null, rg: null, pais: null, mu: null, zona: null },
     paises: [],          // exterior agrupado: [{slug, nome, cidades:[município da config]}]
     aba: 'br',
     atual: null,         // resultado da região selecionada
@@ -36,6 +36,23 @@
   const ufCfg = uf => S.ufs.find(u => u.cd === uf) || null;
   const muCfg = (uf, mu) => { const u = ufCfg(uf); return u ? u.mu.find(m => m.cd === mu) || null : null; };
   const nomeUF = uf => (uf === 'zz' ? 'Exterior' : (ufCfg(uf) || {}).nome || uf.toUpperCase());
+  // Regiões do IBGE. O resultado de uma região é a soma dos seus estados.
+  const REGIOES = [
+    { cd: 'n', nome: 'Norte', ufs: ['ac', 'ap', 'am', 'pa', 'ro', 'rr', 'to'] },
+    { cd: 'ne', nome: 'Nordeste', ufs: ['al', 'ba', 'ce', 'ma', 'pb', 'pe', 'pi', 'rn', 'se'] },
+    { cd: 'co', nome: 'Centro-Oeste', ufs: ['df', 'go', 'mt', 'ms'] },
+    { cd: 'se', nome: 'Sudeste', ufs: ['es', 'mg', 'rj', 'sp'] },
+    { cd: 's', nome: 'Sul', ufs: ['pr', 'rs', 'sc'] }
+  ];
+  const regiaoCfg = cd => REGIOES.find(r => r.cd === cd) || null;
+  const regiaoDaUF = uf => REGIOES.find(r => r.ufs.includes(uf)) || null;
+  // Soma só quando todos os estados da região já foram baixados, para não mostrar um total parcial.
+  function resultadoRegiao(cd) {
+    const rg = regiaoCfg(cd);
+    if (!rg || rg.ufs.some(uf => !S.porUF[uf])) return null;
+    return somarResultados(rg.ufs.map(uf => S.porUF[uf]));
+  }
+
   const paisCfg = slug => S.paises.find(p => p.slug === slug) || null;
   const paisDoMu = mu => S.paises.find(p => p.cidades.some(m => m.cd === mu)) || null;
 
@@ -97,6 +114,7 @@
 
   // ---------- Rotas (#/uf/sp/mu/71072/zona/0001) ----------
   function hashDe(sel, aba) {
+    if (aba === 'rg' || sel.rg) return '#/rg' + (sel.rg ? '/' + sel.rg : '');
     if (!sel.uf) return aba === 'uf' ? '#/uf' : '#/br';
     let h = sel.uf === 'zz' ? '#/zz' : '#/uf/' + sel.uf;
     if (sel.uf === 'zz' && sel.pais) h += '/pais/' + sel.pais;
@@ -105,13 +123,14 @@
     return h;
   }
   function irPara(sel, aba) {
-    const h = hashDe(sel, aba || (sel.uf === 'zz' ? 'zz' : sel.uf ? 'uf' : 'br'));
+    const h = hashDe(sel, aba || (sel.rg ? 'rg' : sel.uf === 'zz' ? 'zz' : sel.uf ? 'uf' : 'br'));
     if (location.hash === h) aplicarRota(); else location.hash = h;
   }
   function lerRota() {
     const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
-    const sel = { uf: null, pais: null, mu: null, zona: null };
+    const sel = { uf: null, rg: null, pais: null, mu: null, zona: null };
     let aba = 'br';
+    if (p[0] === 'rg') return { sel: Object.assign(sel, { rg: regiaoCfg(p[1]) ? p[1] : null }), aba: 'rg' };
     if (p[0] === 'zz') { sel.uf = 'zz'; aba = 'zz'; p.shift(); }
     else if (p[0] === 'uf') { aba = 'uf'; if (p[1]) sel.uf = p[1].toLowerCase(); p.splice(0, 2); }
     for (let i = 0; i < p.length; i += 2) {
@@ -132,7 +151,7 @@
   }
   function aplicarRota() {
     const { sel, aba } = lerRota();
-    const mudouUF = sel.uf !== S.sel.uf || sel.pais !== S.sel.pais;
+    const mudouUF = sel.uf !== S.sel.uf || sel.pais !== S.sel.pais || sel.rg !== S.sel.rg || aba !== S.aba;
     S.sel = sel; S.aba = aba;
     if (mudouUF) $('filtro-tabela').value = '';
     atualizarControles();
@@ -149,12 +168,16 @@
   }
 
   function atualizarControles() {
-    const { uf, pais, mu, zona } = S.sel;
+    const { uf, rg, pais, mu, zona } = S.sel;
     document.querySelectorAll('.aba').forEach(b => b.setAttribute('aria-selected', String(b.dataset.aba === S.aba)));
-    const exterior = S.aba === 'zz';
+    const exterior = S.aba === 'zz', regioes = S.aba === 'rg';
     $('filtros').hidden = S.aba === 'br';
-    $('campo-uf').hidden = exterior;
+    $('campo-rg').hidden = !regioes;
+    $('campo-uf').hidden = exterior || regioes;
     $('campo-pais').hidden = !exterior;
+    $('campo-mu').hidden = regioes;
+    $('campo-zona').hidden = regioes;
+    $('sel-rg').value = rg || '';
     $('rotulo-mu').textContent = exterior ? 'Cidade' : 'Município';
     $('sel-uf').value = uf && uf !== 'zz' ? uf : '';
     $('sel-pais').value = pais || '';
@@ -166,9 +189,10 @@
     // O que aparece em cada aba:
     //  Brasil   → placar geral (Brasil + exterior) e mapa por estado ou mapa-múndi
     //  Estados  → lista de estados; depois placar, mapa municipal e tabela de municípios/zonas
+    //  Regiões  → mapa e lista das 5 regiões; depois placar da região, mapa e tabela dos seus estados
     //  Exterior → total do exterior e mapa-múndi por país; depois país → cidades → zonas
     const listaEstados = S.aba === 'uf' && !uf;
-    $('sec-placar').hidden = listaEstados;
+    $('sec-placar').hidden = listaEstados || (regioes && !rg);
     $('sec-mapa').hidden = listaEstados;
     $('sec-tabela').hidden = S.aba === 'br' || (exterior && !p && !m) || (exterior && m && m.zonas.length < 2);
     $('dica-aba').hidden = S.aba !== 'br';
@@ -192,7 +216,10 @@
     $('trilha').hidden = S.aba === 'br'; // na página inicial o placar já diz "Brasil + exterior"
     if (S.aba !== 'br') {
       const link = (txt, sel, ativo) => (ativo ? `<a href="${hashDe(sel, S.aba)}">${esc(txt)}</a>` : `<strong>${esc(txt)}</strong>`);
-      if (exterior) {
+      if (regioes) {
+        partes.push(link('Regiões', { rg: null }, rg));
+        if (rg) partes.push(`<strong>${esc(regiaoCfg(rg).nome)}</strong>`);
+      } else if (exterior) {
         partes.push(link('Exterior', { uf: 'zz' }, p || m));
         if (p) partes.push(link(p.nome, { uf: 'zz', pais }, m));
       } else {
@@ -203,6 +230,11 @@
       if (zona) partes.push(`<strong>Zona ${esc(zona)}</strong>`);
     }
     $('trilha').innerHTML = partes.join('<span class="sep">›</span>');
+  }
+
+  function preencherRegioes() {
+    $('sel-rg').innerHTML = '<option value="">Todas as regiões</option>' +
+      REGIOES.map(r => `<option value="${r.cd}">${r.nome}</option>`).join('');
   }
 
   function preencherPaises() {
@@ -298,6 +330,7 @@
       const aba = b.dataset.aba;
       if (aba === 'br') irPara({ uf: null }, 'br');
       else if (aba === 'zz') irPara({ uf: 'zz' }, 'zz');
+      else if (aba === 'rg') irPara({ rg: S.sel.rg || null }, 'rg');
       else irPara({ uf: S.sel.uf && S.sel.uf !== 'zz' ? S.sel.uf : null }, 'uf');
     }));
     document.querySelectorAll('#alternar-mapa button').forEach(b => b.addEventListener('click', () => {
@@ -308,6 +341,7 @@
     }));
     $('ir-estados').addEventListener('click', () => { irPara({ uf: null }, 'uf'); scrollTo(0, 0); });
     $('sel-uf').addEventListener('change', e => irPara({ uf: e.target.value || null }, 'uf'));
+    $('sel-rg').addEventListener('change', e => irPara({ rg: e.target.value || null }, 'rg'));
     $('sel-pais').addEventListener('change', e => irPara({ uf: 'zz', pais: e.target.value || null }, 'zz'));
     ligarBusca();
     $('sel-zona').addEventListener('change', e => irPara({ uf: S.sel.uf, pais: S.sel.pais, mu: S.sel.mu, zona: e.target.value || null }));
@@ -331,7 +365,8 @@
 
   // ---------- Placar ----------
   function tituloLocal() {
-    const { uf, pais, mu, zona } = S.sel;
+    const { uf, rg, pais, mu, zona } = S.sel;
+    if (S.aba === 'rg') return rg ? 'Região ' + regiaoCfg(rg).nome : 'Regiões';
     if (!uf) return 'Brasil';
     const m = mu ? muCfg(uf, mu) : null;
     if (uf === 'zz') {
@@ -347,7 +382,8 @@
 
   function renderPlacar(r) {
     $('titulo-local').textContent = tituloLocal();
-    $('sobretitulo').textContent = !S.sel.uf ? 'Resultado geral · Brasil + exterior'
+    $('sobretitulo').textContent = S.aba === 'rg' ? 'Resultado na região · soma dos estados'
+      : !S.sel.uf ? 'Resultado geral · Brasil + exterior'
       : S.sel.uf === 'zz' && !S.sel.pais && !S.sel.mu ? 'Apuração total no exterior' : 'Resultado em';
     const { lula, flavio } = r;
     const temVotos = r.soma > 0;
@@ -505,7 +541,7 @@
       <g class="rotulos"></g></svg>`;
     const svg = caixa.querySelector('svg');
     const g = svg.querySelector('.rotulos');
-    const navegavel = S.aba === 'uf';
+    const navegavel = S.aba === 'uf' || S.aba === 'rg';
     svg.querySelectorAll('path').forEach(p => {
       if (!navegavel) p.setAttribute('tabindex', '-1');
       const b = p.getBBox();
@@ -518,10 +554,13 @@
       t.textContent = p.dataset.uf.toUpperCase();
       g.appendChild(t);
     });
+    // Na aba Regiões sem região escolhida, cada estado mostra o total da sua região.
+    const porRegiao = () => S.aba === 'rg' && !S.sel.rg;
     ligarEventosMapa(svg,
-      p => nomeUF(p.dataset.uf),
-      p => S.porUF[p.dataset.uf],
-      p => (S.aba === 'uf' ? { uf: p.dataset.uf } : null));
+      p => (porRegiao() ? 'Região ' + regiaoDaUF(p.dataset.uf).nome : nomeUF(p.dataset.uf)),
+      p => (porRegiao() ? resultadoRegiao(regiaoDaUF(p.dataset.uf).cd) : S.porUF[p.dataset.uf]),
+      p => (S.aba === 'uf' || (S.aba === 'rg' && S.sel.rg) ? { uf: p.dataset.uf }
+        : S.aba === 'rg' ? { rg: regiaoDaUF(p.dataset.uf).cd } : null));
     S.mapaBrasilAba = S.aba;
     pintarMapa();
   }
@@ -616,6 +655,14 @@
           el.style.fill = cor(resultadoIso(el.dataset.iso));
           el.classList.toggle('selecionado', !!sel && el.dataset.iso === sel.iso);
         });
+      } else if (S.aba === 'rg') {
+        // Sem região escolhida: cada estado com a cor da sua região. Com região: só os estados dela.
+        const rg = regiaoCfg(S.sel.rg);
+        caixa.querySelectorAll('path.regiao').forEach(p => {
+          const fora = rg && !rg.ufs.includes(p.dataset.uf);
+          p.style.fill = fora ? 'var(--fora)' : cor(rg ? S.porUF[p.dataset.uf] : resultadoRegiao(regiaoDaUF(p.dataset.uf).cd));
+          p.classList.remove('selecionado');
+        });
       } else {
         caixa.querySelectorAll('path.regiao').forEach(p => {
           p.style.fill = cor(S.porUF[p.dataset.uf]);
@@ -627,11 +674,13 @@
   }
 
   function renderPlacarMapa() {
+    const rgSel = S.aba === 'rg' ? regiaoCfg(S.sel.rg) : null;
     const lista = S.mapaMundo ? S.paises.filter(p => p.iso).map(resultadoPais)
+      : S.aba === 'rg' ? (rgSel ? rgSel.ufs.map(uf => S.porUF[uf]) : REGIOES.map(r => resultadoRegiao(r.cd)))
       : S.sel.uf ? Object.values(S.porMu[S.sel.uf] || {}) : S.ufs.filter(u => u.cd !== 'zz').map(u => S.porUF[u.cd]);
     const venc = { l: 0, f: 0 };
     lista.forEach(r => { const v = vencedor(r); if (v) venc[v]++; });
-    const rotulo = S.mapaMundo ? 'países' : S.sel.uf ? 'municípios' : 'estados';
+    const rotulo = S.mapaMundo ? 'países' : S.aba === 'rg' && !rgSel ? 'regiões' : S.sel.uf ? 'municípios' : 'estados';
     let html = `<div class="contagem">
       <div class="c-l"><strong>${venc.l}</strong><span>${rotulo} com Lula à frente</span></div>
       <div class="c-f"><strong>${venc.f}</strong><span>${rotulo} com Flávio à frente</span></div></div>`;
@@ -659,6 +708,14 @@
       if (!S.mapaMundo || S.mapaMundoAba !== S.aba) desenharMapaMundo(); else pintarMapa();
       return;
     }
+    if (S.aba === 'rg') {
+      const rg = regiaoCfg(S.sel.rg);
+      $('titulo-mapa').textContent = rg ? `Estados da região ${rg.nome}` : 'Onde cada candidato venceu, por região';
+      $('sub-mapa').textContent = rg ? 'Cada estado da região pintado com a cor de quem está à frente. Toque para ver o estado.'
+        : 'Cada região pintada com a cor de quem está à frente. Toque em uma região para ver o resultado dela.';
+      if (S.mapaMunUF || S.mapaMundo || S.mapaBrasilAba !== S.aba || !$('mapa').querySelector('svg[aria-label^="Mapa do Brasil"]')) desenharMapaBrasil(); else pintarMapa();
+      return;
+    }
     if (!uf) {
       $('titulo-mapa').textContent = 'Onde cada candidato venceu';
       $('sub-mapa').textContent = 'Cada estado pintado com a cor de quem está à frente. Toque em um estado para ver o percentual.';
@@ -684,7 +741,12 @@
 
   // ---------- Tabela ----------
   function linhasTabela() {
-    const { uf, pais, mu } = S.sel;
+    const { uf, rg, pais, mu } = S.sel;
+    if (S.aba === 'rg') {
+      const r = regiaoCfg(rg);
+      if (r) return r.ufs.map(cd => ({ chave: cd, nome: nomeUF(cd), sub: cd.toUpperCase(), r: S.porUF[cd], destino: { uf: cd } }));
+      return REGIOES.map(x => ({ chave: x.cd, nome: x.nome, sub: x.ufs.map(u => u.toUpperCase()).join(', '), r: resultadoRegiao(x.cd), destino: { rg: x.cd } }));
+    }
     if (!uf) {
       const l = S.ufs.filter(u => u.cd !== 'zz').map(u => ({ chave: u.cd, nome: u.nome, sub: u.cd.toUpperCase(), r: S.porUF[u.cd], destino: { uf: u.cd } }));
       return l;
@@ -707,12 +769,20 @@
   function renderTabela() {
     const { uf, mu, zona } = S.sel;
     const p = uf === 'zz' && S.sel.pais ? paisCfg(S.sel.pais) : null;
-    $('titulo-tabela').textContent = !uf ? 'Escolha um estado' : mu ? 'Resultado por zona eleitoral'
-      : p ? `Resultado por cidade · ${p.nome}` : `Resultado por município · ${nomeUF(uf)}`;
+    const rg = S.aba === 'rg' ? regiaoCfg(S.sel.rg) : null;
     const sub = $('sub-tabela');
-    sub.hidden = !!(uf && !mu && !p);
-    sub.textContent = !uf ? 'Toque em um estado para ver o resultado dele, dos municípios e das zonas eleitorais.'
-      : p ? 'Toque em uma cidade para ver o resultado dela.' : 'Toque em uma zona para ver o resultado dela.';
+    if (S.aba === 'rg') {
+      $('titulo-tabela').textContent = rg ? `Estados da região ${rg.nome}` : 'Escolha uma região';
+      sub.textContent = rg ? 'Toque em um estado para ver o resultado dele, dos municípios e das zonas eleitorais.'
+        : 'Toque em uma região para ver o resultado dela e dos seus estados.';
+      sub.hidden = false;
+    } else {
+      $('titulo-tabela').textContent = !uf ? 'Escolha um estado' : mu ? 'Resultado por zona eleitoral'
+        : p ? `Resultado por cidade · ${p.nome}` : `Resultado por município · ${nomeUF(uf)}`;
+      sub.hidden = !!(uf && !mu && !p);
+      sub.textContent = !uf ? 'Toque em um estado para ver o resultado dele, dos municípios e das zonas eleitorais.'
+        : p ? 'Toque em uma cidade para ver o resultado dela.' : 'Toque em uma zona para ver o resultado dela.';
+    }
     const filtro = $('filtro-tabela').value.trim().toLowerCase();
     let linhas = linhasTabela().filter(l => !filtro || l.nome.toLowerCase().includes(filtro) || (l.sub || '').toLowerCase().includes(filtro));
     const { campo, dir } = S.ordem;
@@ -860,12 +930,16 @@
 
   async function carregarVista(navegacao) {
     const geracao = navegacao ? ++S.geracao : S.geracao;
-    const { uf, pais, mu, zona } = S.sel;
+    const { uf, rg, pais, mu, zona } = S.sel;
     const listaEstados = S.aba === 'uf' && !uf; // aba Estados antes de escolher o estado
+    const regioes = S.aba === 'rg';             // aba Regiões: tudo vem da soma dos estados
     const totalPais = uf === 'zz' && pais && !mu; // país do exterior: soma das cidades
     if (navegacao) {
       // Mostra imediatamente o que já está em memória.
-      if (!listaEstados) {
+      if (regioes) {
+        if (rg) renderPlacar(resultadoRegiao(rg) || vazioPlacar());
+        prepararMapa(geracao);
+      } else if (!listaEstados) {
         const cache = zona ? (S.porZona[uf + mu] || {})[zona] : mu ? (S.porMu[uf] || {})[mu]
           : totalPais ? null : uf === 'zz' ? exteriorTotal() : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
         renderPlacar(cache || vazioPlacar());
@@ -875,7 +949,7 @@
     }
     girar(true);
     try {
-      if (!listaEstados) {
+      if (!listaEstados && !regioes) {
         const r = totalPais ? await carregarPais(pais) : await TSE.resultado(uf, mu, zona);
         if (geracao !== S.geracao) return;
         if (!uf) { r.br = true; S.brasil = r; }
@@ -899,6 +973,7 @@
       if (geracao !== S.geracao) return;
       renderTabela();
       if (uf === 'zz') renderPlacar(!pais && !mu ? exteriorTotal() || S.atual : S.atual);
+      if (regioes && rg) renderPlacar(resultadoRegiao(rg) || vazioPlacar());
       if (!listaEstados) pintarMapa();
     } catch (e) {
       if (geracao !== S.geracao) return;
@@ -992,6 +1067,7 @@
     $('turno-label').textContent = TSE.info.turno === 1 ? '1º turno' : '2º turno';
     if (TSE.info.demo) avisoDemo();
     preencherEstados();
+    preencherRegioes();
     montarPaises();
     preencherPaises();
     S.contador = INTERVALO;

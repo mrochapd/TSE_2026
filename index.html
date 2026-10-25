@@ -47,6 +47,9 @@
         <button type="button" role="tab" class="aba" data-aba="br" aria-selected="true">
           <span aria-hidden="true">🇧🇷</span> Brasil
         </button>
+        <button type="button" role="tab" class="aba" data-aba="rg" aria-selected="false">
+          <span aria-hidden="true">🗺️</span> Regiões
+        </button>
         <button type="button" role="tab" class="aba" data-aba="uf" aria-selected="false">
           <span aria-hidden="true">📍</span> Estados
         </button>
@@ -55,6 +58,10 @@
         </button>
       </div>
       <div class="filtros" id="filtros">
+        <div class="campo" id="campo-rg" hidden>
+          <label for="sel-rg">Região</label>
+          <select id="sel-rg"><option value="">Todas as regiões</option></select>
+        </div>
         <div class="campo" id="campo-uf">
           <label for="sel-uf">Estado</label>
           <select id="sel-uf"><option value="">Selecione o estado</option></select>
