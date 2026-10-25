@@ -24,6 +24,8 @@
     mapaMunUF: null,     // UF cujo mapa municipal está desenhado
     muCarregado: new Set(), // UFs cujos municípios já foram baixados ao menos uma vez
     muEmCurso: new Set(),
+    brasil: null,        // resultado do Brasil (inclui o exterior)
+    indice: null,        // andamento por abrangência, do índice do TSE
     fotos: {}
   };
 
@@ -344,7 +346,10 @@
     $('votos-flavio-barra').textContent = n(flavio.votos) + ' votos';
     const dif = Math.abs(lula.votos - flavio.votos);
     const dv = $('dif-votos');
-    if (!temVotos) { dv.textContent = r.semArquivo ? 'Aguardando dados do TSE' : 'Aguardando votos apurados'; dv.style.color = ''; }
+    if (!temVotos) {
+      dv.textContent = r.semVotos ? 'O TSE ainda não publicou os votos por candidato' : r.semArquivo ? 'Aguardando dados do TSE' : 'Aguardando votos apurados';
+      dv.style.color = '';
+    }
     else if (!dif) { dv.textContent = 'Empate'; dv.style.color = ''; }
     else {
       const l = lula.votos > flavio.votos;
@@ -387,7 +392,12 @@
     $('n-validos').innerHTML = comPct(r.validos, total);
     $('n-brancos').innerHTML = comPct(r.brancos, total);
     $('n-nulos').innerHTML = comPct(r.nulos, total);
-    $('hora-tse').textContent = r.atualizado ? 'gerado em ' + r.atualizado : (r.semArquivo ? 'arquivo ainda não publicado' : '—');
+    $('hora-tse').textContent = (r.atualizado ? 'gerado em ' + r.atualizado : (r.semArquivo ? 'arquivo ainda não publicado' : '—')) +
+      (r.calculado ? ' · total do exterior calculado como total do Brasil menos a soma dos estados, porque o arquivo do exterior no TSE está desatualizado' : '');
+
+    // País/cidade do exterior zerados enquanto o exterior já tem votos: o TSE ainda não atualizou esses arquivos.
+    const ext = S.sel.uf === 'zz' && (S.sel.pais || S.sel.mu) ? exteriorTotal() : null;
+    $('aviso-dados').hidden = !(ext && ext.secoes.apuradas > 0 && !r.secoes.apuradas);
   }
 
   function mostrarFoto(k) {
@@ -660,13 +670,53 @@
   const completo = r => r && r.secoes.total > 0 && r.secoes.apuradas >= r.secoes.total;
 
   async function carregarUFs() {
-    const lista = S.ufs.map(u => u.cd);
+    const lista = S.ufs.map(u => u.cd).concat(['br', 'indice']);
     await TSE.emLotes(lista, 6, async uf => {
       try {
-        S.porUF[uf] = await TSE.resultado(uf);
-        pintarMapa(); agendarTabela();
+        if (uf === 'br') S.brasil = await TSE.resultado(null);
+        else if (uf === 'indice') S.indice = await TSE.indice();
+        else { S.porUF[uf] = await TSE.resultado(uf); pintarMapa(); agendarTabela(); }
       } catch (e) { /* mantém o último valor conhecido */ }
     });
+  }
+
+  // Total do exterior. O TSE às vezes demora a atualizar o arquivo do exterior (zz), embora o
+  // total do Brasil já inclua esses votos. Nesse caso o exterior é calculado como
+  // Brasil − soma dos 27 estados, desde que o número de seções bata com o índice do TSE.
+  function exteriorTotal() {
+    const zz = S.porUF.zz, idx = S.indice && S.indice.zz;
+    if (!zz || !idx || idx.apuradas == null || (zz.secoes.apuradas || 0) >= idx.apuradas) return zz || null;
+    const calc = exteriorPorDiferenca();
+    if (calc && calc.secoes.apuradas === idx.apuradas) return calc;
+    // Sem como calcular os votos: mostra só o andamento informado pelo índice.
+    return Object.assign(vazioPlacar(), {
+      eleitorado: idx.eleitorado != null ? idx.eleitorado : zz.eleitorado,
+      comparecimento: idx.comparecimento, abstencao: idx.abstencao,
+      secoes: { total: idx.total, apuradas: idx.apuradas, pct: idx.total ? idx.apuradas / idx.total * 100 : 0 },
+      atualizado: zz.atualizado, semVotos: true
+    });
+  }
+
+  function exteriorPorDiferenca() {
+    const br = S.brasil;
+    const estados = S.ufs.filter(u => u.cd !== 'zz').map(u => S.porUF[u.cd]);
+    if (!br || estados.some(r => !r)) return null;
+    const est = somarResultados(estados);
+    const dif = (a, b) => (a == null || b == null ? null : a - b);
+    const r = vazioPlacar();
+    r.lula.votos = br.lula.votos - est.lula.votos;
+    r.flavio.votos = br.flavio.votos - est.flavio.votos;
+    r.lula.sqcand = br.lula.sqcand; r.flavio.sqcand = br.flavio.sqcand;
+    for (const c of ['eleitorado', 'comparecimento', 'abstencao', 'validos', 'brancos', 'nulos']) r[c] = dif(br[c], est[c]);
+    const total = dif(br.secoes.total, est.secoes.total), apuradas = dif(br.secoes.apuradas, est.secoes.apuradas || 0);
+    if ([r.lula.votos, r.flavio.votos, total, apuradas].some(x => x == null || x < 0)) return null;
+    r.soma = r.lula.votos + r.flavio.votos;
+    r.lula.pct = r.soma ? r.lula.votos / r.soma * 100 : 0;
+    r.flavio.pct = r.soma ? r.flavio.votos / r.soma * 100 : 0;
+    r.secoes = { total, apuradas, pct: total ? apuradas / total * 100 : 0 };
+    r.atualizado = br.atualizado;
+    r.calculado = true;
+    return r;
   }
 
   // Baixa os municípios da UF (ou as cidades do exterior). Continua mesmo se o usuário
@@ -732,7 +782,7 @@
       // Mostra imediatamente o que já está em memória.
       if (!listaEstados) {
         const cache = zona ? (S.porZona[uf + mu] || {})[zona] : mu ? (S.porMu[uf] || {})[mu]
-          : totalPais ? null : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
+          : totalPais ? null : uf === 'zz' ? exteriorTotal() : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
         renderPlacar(cache || vazioPlacar());
         prepararMapa(geracao);
       }
@@ -743,18 +793,19 @@
       if (!listaEstados) {
         const r = totalPais ? await carregarPais(pais) : await TSE.resultado(uf, mu, zona);
         if (geracao !== S.geracao) return;
-        if (!uf) r.br = true;
+        if (!uf) { r.br = true; S.brasil = r; }
         S.atual = r;
         if (zona) (S.porZona[uf + mu] || (S.porZona[uf + mu] = {}))[zona] = r;
         else if (mu) (S.porMu[uf] || (S.porMu[uf] = {}))[mu] = r;
         else if (uf && !totalPais) S.porUF[uf] = r;
-        renderPlacar(r);
+        renderPlacar(uf === 'zz' && !pais && !mu ? exteriorTotal() || r : r);
       }
       status('vivo');
 
       const tarefas = [];
       // O mapa do Brasil precisa dos 27 estados + exterior; o placar do estado usa o total da UF.
-      if (!uf || Object.keys(S.porUF).length < S.ufs.length || (!navegacao && S.ciclos % 2 === 0)) tarefas.push(carregarUFs());
+      // O exterior também precisa do Brasil, dos estados e do índice (ver exteriorTotal).
+      if (!uf || uf === 'zz' || Object.keys(S.porUF).length < S.ufs.length || (!navegacao && S.ciclos % 2 === 0)) tarefas.push(carregarUFs());
       if (uf && uf !== 'zz') {
         const recarregarTudo = !navegacao && S.ciclos % 3 === 0; // municípios: a cada ~90 s
         if (!S.muCarregado.has(uf) || recarregarTudo) tarefas.push(carregarMunicipios(uf));
@@ -763,7 +814,8 @@
       await Promise.all(tarefas);
       if (geracao !== S.geracao) return;
       renderTabela();
-      if (uf !== 'zz' && !listaEstados) pintarMapa();
+      if (uf === 'zz') renderPlacar(!pais && !mu ? exteriorTotal() || S.atual : S.atual);
+      else if (!listaEstados) pintarMapa();
     } catch (e) {
       if (geracao !== S.geracao) return;
       status('erro', e);

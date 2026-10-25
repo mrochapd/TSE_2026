@@ -192,6 +192,22 @@
       }
     },
 
+    // Índice de andamento do TSE (br-e006258-ab.json): seções apuradas e comparecimento de cada
+    // UF, do exterior (zz) e do Brasil. Serve para saber se o arquivo de resultado de alguma
+    // abrangência ficou desatualizado.
+    async indice() {
+      if (info.demo) return null;
+      const d = await pegarTSE(`/oficial/${info.ciclo}/${ELEICAO}/dados/br/br-${COD}-ab.json`);
+      const mapa = {};
+      for (const a of Array.isArray(obj(d).abr) ? d.abr : []) {
+        const s = obj(a.s), e = obj(a.e);
+        mapa[String(a.cdabr).toLowerCase()] = {
+          apuradas: num(s.st), total: num(s.ts), eleitorado: num(e.te), comparecimento: num(e.c), abstencao: num(e.a)
+        };
+      }
+      return mapa;
+    },
+
     foto(sqcand) {
       if (!sqcand || info.demo) return null;
       const caminho = `/oficial/${info.ciclo}/${ELEICAO}/fotos/br/${sqcand}.jpeg`;
