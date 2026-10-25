@@ -93,20 +93,26 @@
     const { uf, mu, zona } = S.sel;
     document.querySelectorAll('.aba').forEach(b => b.setAttribute('aria-selected', String(b.dataset.aba === S.aba)));
     const exterior = S.aba === 'zz';
-    $('campo-uf').hidden = exterior || S.aba === 'br';
-    $('campo-mu').hidden = S.aba === 'br';
-    $('campo-zona').hidden = S.aba === 'br';
     $('filtros').hidden = S.aba === 'br';
+    $('campo-uf').hidden = exterior;
     $('rotulo-mu').textContent = exterior ? 'Cidade no exterior' : 'Município';
     $('sel-uf').value = uf && uf !== 'zz' ? uf : '';
+
+    // Na aba Estados sem estado escolhido, só aparece a lista de estados.
+    const listaEstados = S.aba === 'uf' && !uf;
+    $('sec-placar').hidden = listaEstados;
+    $('sec-mapa').hidden = listaEstados;
+    $('sec-tabela').hidden = S.aba === 'br';
+    $('dica-aba').hidden = S.aba !== 'br';
 
     const u = uf ? ufCfg(uf) : null;
     const busca = $('busca-mu');
     busca.disabled = !u;
-    busca.placeholder = u ? (exterior ? 'Digite a cidade…' : 'Todos os municípios — digite para buscar') : 'Escolha um estado primeiro';
-    $('lista-mu').innerHTML = u ? u.mu.map(m => `<option value="${esc(m.nome)}"></option>`).join('') : '';
+    busca.placeholder = u ? (exterior ? 'Buscar cidade…' : 'Buscar município…') : 'Escolha o estado antes';
     const m = mu ? muCfg(uf, mu) : null;
     busca.value = m ? m.nome : '';
+    $('limpar-mu').hidden = !busca.value;
+    fecharSugestoes();
 
     const sz = $('sel-zona');
     sz.disabled = !m || !m.zonas.length;
@@ -114,13 +120,97 @@
       (m ? m.zonas.map(z => `<option value="${z}">Zona ${z}</option>`).join('') : '');
     sz.value = zona || '';
 
-    // Trilha
-    const partes = [`<a href="#/br">Brasil</a>`];
-    if (uf) partes.push(mu ? `<a href="${hashDe({ uf })}">${esc(nomeUF(uf))}</a>` : `<strong>${esc(nomeUF(uf))}</strong>`);
-    if (m) partes.push(zona ? `<a href="${hashDe({ uf, mu })}">${esc(m.nome)}</a>` : `<strong>${esc(m.nome)}</strong>`);
-    if (zona) partes.push(`<strong>Zona ${esc(zona)}</strong>`);
-    if (!uf) partes[0] = '<strong>Brasil</strong>';
+    // Trilha: Estados › São Paulo › Campinas › Zona 0033  (ou Exterior › Lisboa)
+    const partes = [];
+    $('trilha').hidden = S.aba === 'br'; // na página inicial o placar já diz "Brasil + exterior"
+    if (S.aba !== 'br') {
+      const raiz = exterior ? 'Exterior' : 'Estados';
+      const hashRaiz = exterior ? '#/zz' : '#/uf';
+      partes.push((exterior ? mu : uf) ? `<a href="${hashRaiz}">${raiz}</a>` : `<strong>${raiz}</strong>`);
+      if (uf && !exterior) partes.push(mu ? `<a href="${hashDe({ uf })}">${esc(nomeUF(uf))}</a>` : `<strong>${esc(nomeUF(uf))}</strong>`);
+      if (m) partes.push(zona ? `<a href="${hashDe({ uf, mu })}">${esc(m.nome)}</a>` : `<strong>${esc(m.nome)}</strong>`);
+      if (zona) partes.push(`<strong>Zona ${esc(zona)}</strong>`);
+    }
     $('trilha').innerHTML = partes.join('<span class="sep">›</span>');
+  }
+
+  // ---------- Busca de município / cidade (lista própria: o <datalist> funciona mal no iPhone) ----------
+  const semAcento = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  let sugestoes = [], sugAtiva = -1;
+
+  function abrirSugestoes() {
+    const u = ufCfg(S.sel.uf);
+    const lista = $('sugestoes-mu'), busca = $('busca-mu');
+    if (!u) return fecharSugestoes();
+    const txt = semAcento(busca.value);
+    const atual = S.sel.mu ? muCfg(S.sel.uf, S.sel.mu) : null;
+    const filtro = atual && busca.value === atual.nome ? '' : txt; // ao tocar no campo já preenchido, mostra todos
+    const comeca = [], contem = [];
+    for (const m of u.mu) {
+      const nome = semAcento(m.nome);
+      if (!filtro || nome.startsWith(filtro)) comeca.push(m);
+      else if (nome.includes(filtro)) contem.push(m);
+    }
+    sugestoes = comeca.concat(contem).slice(0, 60);
+    sugAtiva = -1;
+    lista.innerHTML = sugestoes.length
+      ? sugestoes.map((m, i) => `<li role="option" id="sug-${i}" data-i="${i}">${esc(m.nome)}${m.capital ? '<small>capital</small>' : ''}</li>`).join('')
+      : '<li class="vazio" role="option" aria-disabled="true">Nenhum resultado</li>';
+    lista.hidden = false;
+    lista.scrollTop = 0;
+    busca.setAttribute('aria-expanded', 'true');
+  }
+  function fecharSugestoes() {
+    $('sugestoes-mu').hidden = true;
+    $('busca-mu').setAttribute('aria-expanded', 'false');
+    $('busca-mu').removeAttribute('aria-activedescendant');
+  }
+  function escolherSugestao(i) {
+    const m = sugestoes[i];
+    if (!m) return;
+    fecharSugestoes();
+    $('busca-mu').blur();
+    irPara({ uf: S.sel.uf, mu: m.cd });
+  }
+  function marcarSugestao(i) {
+    const itens = $('sugestoes-mu').querySelectorAll('li[data-i]');
+    if (!itens.length) return;
+    sugAtiva = (i + itens.length) % itens.length;
+    itens.forEach((li, k) => li.classList.toggle('ativo', k === sugAtiva));
+    itens[sugAtiva].scrollIntoView({ block: 'nearest' });
+    $('busca-mu').setAttribute('aria-activedescendant', 'sug-' + sugAtiva);
+  }
+
+  function ligarBusca() {
+    const busca = $('busca-mu'), lista = $('sugestoes-mu');
+    busca.addEventListener('focus', abrirSugestoes);
+    busca.addEventListener('input', () => { $('limpar-mu').hidden = !busca.value; abrirSugestoes(); });
+    busca.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (lista.hidden) abrirSugestoes(); marcarSugestao(sugAtiva + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); marcarSugestao(sugAtiva - 1); }
+      else if (e.key === 'Escape') fecharSugestoes();
+      else if (e.key === 'Enter') { e.preventDefault(); escolherSugestao(sugAtiva >= 0 ? sugAtiva : 0); }
+    });
+    // mousedown + preventDefault: o toque escolhe o item antes de o campo perder o foco.
+    lista.addEventListener('mousedown', e => e.preventDefault());
+    lista.addEventListener('click', e => {
+      const li = e.target.closest('li[data-i]');
+      if (li) escolherSugestao(+li.dataset.i);
+    });
+    busca.addEventListener('blur', () => setTimeout(() => {
+      fecharSugestoes();
+      const atual = S.sel.mu ? muCfg(S.sel.uf, S.sel.mu) : null;
+      if (busca.value.trim() === '' && atual) irPara({ uf: S.sel.uf });
+      else busca.value = atual ? atual.nome : '';
+      $('limpar-mu').hidden = !busca.value;
+    }, 200));
+    $('limpar-mu').addEventListener('click', () => {
+      busca.value = '';
+      $('limpar-mu').hidden = true;
+      if (S.sel.mu) irPara({ uf: S.sel.uf });
+      else busca.focus();
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('.busca')) fecharSugestoes(); });
   }
 
   function ligarControles() {
@@ -128,29 +218,11 @@
       const aba = b.dataset.aba;
       if (aba === 'br') irPara({ uf: null }, 'br');
       else if (aba === 'zz') irPara({ uf: 'zz' }, 'zz');
-      else {
-        irPara({ uf: S.sel.uf && S.sel.uf !== 'zz' ? S.sel.uf : null }, 'uf');
-        if (!S.sel.uf || S.sel.uf === 'zz') setTimeout(() => $('sel-uf').focus(), 50);
-      }
+      else irPara({ uf: S.sel.uf && S.sel.uf !== 'zz' ? S.sel.uf : null }, 'uf');
     }));
+    $('ir-estados').addEventListener('click', () => { irPara({ uf: null }, 'uf'); scrollTo(0, 0); });
     $('sel-uf').addEventListener('change', e => irPara({ uf: e.target.value || null }, 'uf'));
-    const busca = $('busca-mu');
-    const escolherMu = () => {
-      const u = ufCfg(S.sel.uf); if (!u) return;
-      const txt = busca.value.trim().toLowerCase();
-      if (!txt) { if (S.sel.mu) irPara({ uf: S.sel.uf }); return; }
-      const m = u.mu.find(x => x.nome.toLowerCase() === txt);
-      if (m && m.cd !== S.sel.mu) irPara({ uf: S.sel.uf, mu: m.cd });
-    };
-    busca.addEventListener('input', () => { if (busca.value.trim() === '' || $('lista-mu').querySelector(`option[value="${CSS.escape(busca.value)}"]`)) escolherMu(); });
-    busca.addEventListener('change', escolherMu);
-    busca.addEventListener('keydown', e => {
-      if (e.key !== 'Enter') return;
-      const u = ufCfg(S.sel.uf); if (!u) return;
-      const txt = busca.value.trim().toLowerCase();
-      const m = u.mu.find(x => x.nome.toLowerCase() === txt) || u.mu.find(x => x.nome.toLowerCase().startsWith(txt));
-      if (m) irPara({ uf: S.sel.uf, mu: m.cd });
-    });
+    ligarBusca();
     $('sel-zona').addEventListener('change', e => irPara({ uf: S.sel.uf, mu: S.sel.mu, zona: e.target.value || null }));
     $('btn-atualizar').addEventListener('click', () => atualizar(true));
     $('filtro-tabela').addEventListener('input', renderTabela);
@@ -160,7 +232,14 @@
       renderTabela();
     }));
     window.addEventListener('hashchange', aplicarRota);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && S.contador <= 5) atualizar(); });
+    // iPhone e Android pausam a página em segundo plano: ao voltar, atualiza se os dados estiverem velhos.
+    const aoVoltar = () => {
+      if (document.hidden || !S.ufs.length) return;
+      if (!ultimaHora || Date.now() - ultimaHora.getTime() > INTERVALO * 1000) atualizar();
+    };
+    document.addEventListener('visibilitychange', aoVoltar);
+    window.addEventListener('pageshow', e => { if (e.persisted) aoVoltar(); });
+    window.addEventListener('focus', aoVoltar);
   }
 
   // ---------- Placar ----------
@@ -176,6 +255,7 @@
 
   function renderPlacar(r) {
     $('titulo-local').textContent = tituloLocal();
+    $('sobretitulo').textContent = S.sel.uf ? 'Resultado em' : 'Resultado geral · Brasil + exterior';
     const { lula, flavio } = r;
     const temVotos = r.soma > 0;
     const pl = temVotos ? lula.pct : 50, pf = temVotos ? flavio.pct : 50;
@@ -253,7 +333,8 @@
     return `<h4>${esc(nome)}</h4>
       <div class="linha"><span class="l">Lula</span><b>${pct(r.lula.pct)}</b></div>
       <div class="linha"><span class="f">Flávio</span><b>${pct(r.flavio.pct)}</b></div>
-      <div class="rodape-dica">${r.soma ? n(r.lula.votos) + ' × ' + n(r.flavio.votos) + ' votos · ' : ''}${pct(r.secoes.pct)} apurado${extra ? ' · ' + esc(extra) : ''}</div>`;
+      <div class="rodape-dica">${r.soma && S.aba !== 'br' ? n(r.lula.votos) + ' × ' + n(r.flavio.votos) + ' votos · ' : ''}${pct(r.secoes.pct)} apurado${extra ? ' · ' + esc(extra) : ''}</div>
+      ${S.aba === 'br' ? '<div class="rodape-dica">Votos detalhados na aba Estados</div>' : ''}`;
   }
   function mostrarDica(html, ev) {
     dica.innerHTML = html; dica.hidden = false; moverDica(ev);
@@ -266,20 +347,28 @@
     dica.style.left = Math.max(8, x) + 'px'; dica.style.top = Math.max(8, y) + 'px';
   }
   function esconderDica() { dica.hidden = true; }
+  window.addEventListener('scroll', () => { if (!dica.hidden) esconderDica(); }, { passive: true });
 
   function ligarEventosMapa(svg, nomeDe, resultadoDe, destinoDe) {
-    svg.addEventListener('mousemove', ev => {
+    // Passar o mouse mostra a dica só em computadores; no celular a dica aparece com o toque.
+    svg.addEventListener('pointermove', ev => {
+      if (ev.pointerType !== 'mouse') return;
       const p = ev.target.closest('path.regiao');
       if (!p) { esconderDica(); return; }
       mostrarDica(htmlDica(nomeDe(p), resultadoDe(p)), ev);
     });
-    svg.addEventListener('mouseleave', esconderDica);
+    svg.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse') esconderDica(); });
     svg.addEventListener('click', ev => {
       const p = ev.target.closest('path.regiao');
       if (!p) return;
-      esconderDica();
       const destino = destinoDe(p);
-      if (destino) irPara(destino);
+      if (destino) { esconderDica(); irPara(destino); return; }
+      // Sem destino (página inicial): no celular o toque mostra a dica do estado.
+      svg.querySelectorAll('path.foco').forEach(x => x.classList.remove('foco'));
+      p.classList.add('foco');
+      mostrarDica(htmlDica(nomeDe(p), resultadoDe(p)), ev);
+      clearTimeout(S.timerDica);
+      S.timerDica = setTimeout(() => { esconderDica(); p.classList.remove('foco'); }, 4000);
     });
     svg.addEventListener('keydown', ev => {
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
@@ -301,7 +390,9 @@
       <g class="rotulos"></g></svg>`;
     const svg = caixa.querySelector('svg');
     const g = svg.querySelector('.rotulos');
+    const navegavel = S.aba === 'uf';
     svg.querySelectorAll('path').forEach(p => {
+      if (!navegavel) p.setAttribute('tabindex', '-1');
       const b = p.getBBox();
       if (p.dataset.uf === 'df') return;
       const ajuste = { go: [-10, 8], pe: [10, 0], ba: [6, 0], rj: [4, 4], sc: [6, 0], ma: [6, 6], mg: [6, 4], sp: [0, 4], al: [2, 0], ap: [0, 8], pi: [-2, 10] }[p.dataset.uf] || [0, 0];
@@ -315,7 +406,8 @@
     ligarEventosMapa(svg,
       p => nomeUF(p.dataset.uf),
       p => S.porUF[p.dataset.uf],
-      p => ({ uf: p.dataset.uf }));
+      p => (S.aba === 'uf' ? { uf: p.dataset.uf } : null));
+    S.mapaBrasilAba = S.aba;
     pintarMapa();
   }
 
@@ -385,27 +477,13 @@
     let html = `<div class="contagem">
       <div class="c-l"><strong>${venc.l}</strong><span>${rotulo} com Lula à frente</span></div>
       <div class="c-f"><strong>${venc.f}</strong><span>${rotulo} com Flávio à frente</span></div></div>`;
-    if (!S.sel.uf && S.porUF.zz) {
-      const z = S.porUF.zz;
-      html += `<div class="mini-placar" role="button" tabindex="0" data-ir="zz" style="cursor:pointer">
-        <h3>🌎 Exterior</h3>
-        <div class="linha"><span style="color:var(--lula)">Lula</span><b>${pct(z.lula.pct)}</b></div>
-        <div class="linha"><span style="color:var(--flavio)">Flávio</span><b>${pct(z.flavio.pct)}</b></div>
-        <div class="linha" style="color:var(--texto-2);font-size:.78rem"><span>Apurado</span><b>${pct(z.secoes.pct)}</b></div></div>`;
-    }
     if (S.sel.uf && S.sel.uf !== 'zz' && S.porUF[S.sel.uf]) {
       const r = S.porUF[S.sel.uf];
       html += `<div class="mini-placar"><h3>Total de ${esc(nomeUF(S.sel.uf))}</h3>
         <div class="linha"><span style="color:var(--lula)">Lula</span><b>${pct(r.lula.pct)}</b></div>
         <div class="linha"><span style="color:var(--flavio)">Flávio</span><b>${pct(r.flavio.pct)}</b></div></div>`;
     }
-    const caixa = $('mapa-placar');
-    caixa.innerHTML = html;
-    const ir = caixa.querySelector('[data-ir]');
-    if (ir) {
-      ir.addEventListener('click', () => irPara({ uf: 'zz' }));
-      ir.addEventListener('keydown', e => { if (e.key === 'Enter') irPara({ uf: 'zz' }); });
-    }
+    $('mapa-placar').innerHTML = html;
   }
 
   function renderListaExterior() {
@@ -438,8 +516,8 @@
     const aviso = $('mapa-carregando');
     if (!uf) {
       $('titulo-mapa').textContent = 'Onde cada candidato venceu';
-      $('sub-mapa').textContent = 'Toque ou clique em um estado para ver os detalhes.';
-      if (S.mapaMunUF || !$('mapa').querySelector('svg[aria-label^="Mapa do Brasil"]')) desenharMapaBrasil(); else pintarMapa();
+      $('sub-mapa').textContent = 'Cada estado pintado com a cor de quem está à frente. Toque em um estado para ver o percentual.';
+      if (S.mapaMunUF || S.mapaBrasilAba !== S.aba || !$('mapa').querySelector('svg[aria-label^="Mapa do Brasil"]')) desenharMapaBrasil(); else pintarMapa();
       return;
     }
     if (uf === 'zz') {
@@ -462,7 +540,7 @@
       // Sem malha do IBGE (ex.: modo demonstração ou rede bloqueada): mostra o mapa dos estados.
       $('titulo-mapa').textContent = 'Onde cada candidato venceu';
       $('sub-mapa').textContent = `Mapa municipal indisponível no momento — exibindo os estados, com ${nomeUF(uf)} em destaque.`;
-      if (S.mapaMunUF || !$('mapa').querySelector('svg')) desenharMapaBrasil(); else pintarMapa();
+      if (S.mapaMunUF || S.mapaBrasilAba !== S.aba || !$('mapa').querySelector('svg')) desenharMapaBrasil(); else pintarMapa();
     }
   }
 
@@ -471,7 +549,6 @@
     const { uf, mu } = S.sel;
     if (!uf) {
       const l = S.ufs.filter(u => u.cd !== 'zz').map(u => ({ chave: u.cd, nome: u.nome, sub: u.cd.toUpperCase(), r: S.porUF[u.cd], destino: { uf: u.cd } }));
-      if (ufCfg('zz')) l.push({ chave: 'zz', nome: 'Exterior', sub: 'ZZ', r: S.porUF.zz, destino: { uf: 'zz' } });
       return l;
     }
     if (mu) {
@@ -486,8 +563,12 @@
 
   function renderTabela() {
     const { uf, mu, zona } = S.sel;
-    $('titulo-tabela').textContent = !uf ? 'Resultado por estado' : mu ? 'Resultado por zona eleitoral'
+    $('titulo-tabela').textContent = !uf ? 'Escolha um estado' : mu ? 'Resultado por zona eleitoral'
       : uf === 'zz' ? 'Resultado por cidade no exterior' : `Resultado por município · ${nomeUF(uf)}`;
+    const sub = $('sub-tabela');
+    sub.hidden = !!(uf && !mu);
+    sub.textContent = !uf ? 'Toque em um estado para ver o resultado dele, dos municípios e das zonas eleitorais.'
+      : 'Toque em uma zona para ver o resultado dela.';
     const filtro = $('filtro-tabela').value.trim().toLowerCase();
     let linhas = linhasTabela().filter(l => !filtro || l.nome.toLowerCase().includes(filtro) || (l.sub || '').toLowerCase().includes(filtro));
     const { campo, dir } = S.ordem;
@@ -510,7 +591,7 @@
       const v = vencedor(r);
       const atual = (mu && l.chave === zona);
       return `<tr data-i="${i}" class="${atual ? 'selecionado' : ''}" ${atual ? 'style="background:var(--realce)"' : ''}>
-        <td class="nome-local ${v ? 'vencedor-' + v : ''}">${esc(l.nome)}${l.sub ? `<small>${esc(l.sub)}</small>` : ''}</td>
+        <td class="nome-local ${v ? 'vencedor-' + v : ''}">${esc(l.nome)}${l.sub ? `<small>${esc(l.sub)}</small>` : ''}<small class="apurado-mini">${r ? pct(r.secoes.pct) + ' apurado' : ''}</small></td>
         <td class="c-lula">${r ? pct(r.lula.pct) : '…'}<small>${r ? n(r.lula.votos) : ''}</small></td>
         <td class="c-barra"><div class="mini-barra">${r && r.soma ? `<i class="ml" style="width:${r.lula.pct}%"></i><i class="mf" style="width:${r.flavio.pct}%"></i>` : ''}</div></td>
         <td class="c-flavio">${r ? pct(r.flavio.pct) : '…'}<small>${r ? n(r.flavio.votos) : ''}</small></td>
@@ -585,23 +666,28 @@
   async function carregarVista(navegacao) {
     const geracao = navegacao ? ++S.geracao : S.geracao;
     const { uf, mu, zona } = S.sel;
+    const listaEstados = S.aba === 'uf' && !uf; // aba Estados antes de escolher o estado
     if (navegacao) {
       // Mostra imediatamente o que já está em memória.
-      const cache = zona ? (S.porZona[uf + mu] || {})[zona] : mu ? (S.porMu[uf] || {})[mu] : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
-      renderPlacar(cache || vazioPlacar());
+      if (!listaEstados) {
+        const cache = zona ? (S.porZona[uf + mu] || {})[zona] : mu ? (S.porMu[uf] || {})[mu] : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
+        renderPlacar(cache || vazioPlacar());
+        prepararMapa(geracao);
+      }
       renderTabela();
-      prepararMapa(geracao);
     }
     girar(true);
     try {
-      const r = await TSE.resultado(uf, mu, zona);
-      if (geracao !== S.geracao) return;
-      if (!uf) r.br = true;
-      S.atual = r;
-      if (zona) (S.porZona[uf + mu] || (S.porZona[uf + mu] = {}))[zona] = r;
-      else if (mu) (S.porMu[uf] || (S.porMu[uf] = {}))[mu] = r;
-      else if (uf) S.porUF[uf] = r;
-      renderPlacar(r);
+      if (!listaEstados) {
+        const r = await TSE.resultado(uf, mu, zona);
+        if (geracao !== S.geracao) return;
+        if (!uf) r.br = true;
+        S.atual = r;
+        if (zona) (S.porZona[uf + mu] || (S.porZona[uf + mu] = {}))[zona] = r;
+        else if (mu) (S.porMu[uf] || (S.porMu[uf] = {}))[mu] = r;
+        else if (uf) S.porUF[uf] = r;
+        renderPlacar(r);
+      }
       status('vivo');
 
       const tarefas = [];
@@ -615,7 +701,7 @@
       await Promise.all(tarefas);
       if (geracao !== S.geracao) return;
       renderTabela();
-      if (uf === 'zz') renderListaExterior(); else pintarMapa();
+      if (uf === 'zz') renderListaExterior(); else if (!listaEstados) pintarMapa();
     } catch (e) {
       if (geracao !== S.geracao) return;
       status('erro', e);
@@ -643,14 +729,14 @@
       ultimaHora = new Date();
       textoStatus();
     } else if (tipo === 'erro') {
-      texto.textContent = 'Falha ao atualizar — tentando de novo';
+      texto.textContent = 'Falha · tentando de novo';
       console.warn('Erro ao carregar dados', erro);
     }
   }
   function textoStatus() {
     if (!ultimaHora) return;
     const h = ultimaHora.toLocaleTimeString('pt-BR');
-    $('status-texto').textContent = `${TSE.info.demo ? 'Simulação' : 'Ao vivo'} · ${h} · próxima em ${S.contador}s`;
+    $('status-texto').innerHTML = `<span class="status-rotulo">${TSE.info.demo ? 'Simulação' : 'Ao vivo'} · </span>${h}<span class="status-extra"> · próxima em ${S.contador}s</span>`;
   }
 
   function atualizar(manual) {

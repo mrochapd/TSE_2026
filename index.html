@@ -2,10 +2,20 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#182029" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Apuração 2026">
+  <link rel="apple-touch-icon" href="icones/icone-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <title>Apuração 2026 · Presidente</title>
   <meta name="description" content="Acompanhe a apuração do 2º turno da eleição presidencial de 2026 (Lula x Flávio Bolsonaro) por Brasil, estado, município, zona eleitoral e exterior, com dados oficiais do TSE.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='16' height='32' fill='%23d62839'/%3E%3Crect x='16' width='16' height='32' fill='%231f5fbf'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" sizes="192x192" href="icones/icone-192.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -32,7 +42,7 @@
 
   <main class="conteudo">
     <!-- Seletor de abrangência -->
-    <section class="cartao seletor" aria-label="Escolha a região">
+    <section class="cartao seletor" aria-label="Escolha o que ver">
       <div class="abas" role="tablist" aria-label="Abrangência">
         <button type="button" role="tab" class="aba" data-aba="br" aria-selected="true">
           <span aria-hidden="true">🇧🇷</span> Brasil
@@ -45,28 +55,33 @@
         </button>
       </div>
       <div class="filtros" id="filtros">
-        <label class="campo" id="campo-uf">
-          <span>Estado</span>
+        <div class="campo" id="campo-uf">
+          <label for="sel-uf">Estado</label>
           <select id="sel-uf"><option value="">Selecione o estado</option></select>
-        </label>
-        <label class="campo" id="campo-mu">
-          <span id="rotulo-mu">Município</span>
-          <input id="busca-mu" list="lista-mu" placeholder="Digite para buscar…" autocomplete="off" disabled>
-          <datalist id="lista-mu"></datalist>
-        </label>
-        <label class="campo" id="campo-zona">
-          <span>Zona eleitoral</span>
+        </div>
+        <div class="campo" id="campo-mu">
+          <label for="busca-mu" id="rotulo-mu">Município</label>
+          <div class="busca">
+            <input id="busca-mu" type="text" placeholder="Digite para buscar…" autocomplete="off" autocorrect="off"
+              autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false"
+              aria-controls="sugestoes-mu" aria-autocomplete="list" disabled>
+            <button type="button" class="limpar" id="limpar-mu" aria-label="Limpar busca" hidden>×</button>
+            <ul class="sugestoes" id="sugestoes-mu" role="listbox" hidden></ul>
+          </div>
+        </div>
+        <div class="campo" id="campo-zona">
+          <label for="sel-zona">Zona eleitoral</label>
           <select id="sel-zona" disabled><option value="">Todas as zonas</option></select>
-        </label>
+        </div>
       </div>
       <nav class="trilha" id="trilha" aria-label="Você está em"></nav>
     </section>
 
     <!-- Placar principal -->
-    <section class="cartao placar" aria-labelledby="titulo-local">
+    <section class="cartao placar" id="sec-placar" aria-labelledby="titulo-local">
       <div class="placar-cabecalho">
         <div>
-          <p class="sobretitulo">Resultado em</p>
+          <p class="sobretitulo" id="sobretitulo">Resultado em</p>
           <h2 id="titulo-local">Brasil</h2>
         </div>
         <div class="apuradas">
@@ -132,7 +147,7 @@
     </section>
 
     <!-- Mapa -->
-    <section class="cartao mapa-cartao" aria-labelledby="titulo-mapa">
+    <section class="cartao mapa-cartao" id="sec-mapa" aria-labelledby="titulo-mapa">
       <div class="mapa-cabecalho">
         <div>
           <h2 id="titulo-mapa">Onde cada candidato venceu</h2>
@@ -156,13 +171,17 @@
         <div class="mapa-placar" id="mapa-placar"></div>
       </div>
       <p class="mapa-carregando" id="mapa-carregando" hidden></p>
+      <p class="dica-aba" id="dica-aba" hidden>Para ver os votos de cada estado, cidade ou zona eleitoral, abra a aba <button type="button" class="link" id="ir-estados">Estados</button>.</p>
     </section>
 
     <!-- Tabela detalhada -->
-    <section class="cartao tabela-cartao" aria-labelledby="titulo-tabela">
+    <section class="cartao tabela-cartao" id="sec-tabela" aria-labelledby="titulo-tabela">
       <div class="tabela-cabecalho">
-        <h2 id="titulo-tabela">Resultado por estado</h2>
-        <input type="search" id="filtro-tabela" placeholder="Filtrar…" aria-label="Filtrar tabela">
+        <div>
+          <h2 id="titulo-tabela">Resultado por estado</h2>
+          <p class="sub" id="sub-tabela" hidden></p>
+        </div>
+        <input type="text" id="filtro-tabela" placeholder="Filtrar…" aria-label="Filtrar tabela" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
       </div>
       <div class="tabela-rolagem">
         <table class="tabela" id="tabela">
