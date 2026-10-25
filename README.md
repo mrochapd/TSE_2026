@@ -4,16 +4,13 @@ Site para acompanhar a apuração da eleição presidencial de 2026 — **Lula (
 com os dados oficiais publicados pelo TSE em
 [resultados.tse.jus.br](https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados).
 
-Três abas:
+Duas abas:
 
-- **Brasil** (página inicial): resultado geral, somando o Brasil inteiro e o exterior. Barra horizontal com
+- **Brasil** (página inicial): resultado geral do TSE, que já inclui os votos do exterior. Barra horizontal com
   Lula (vermelho) à esquerda e Flávio (azul) à direita, fotos com o percentual de cada um e o mapa do Brasil
   pintado pela cor de quem está à frente em cada estado.
 - **Estados**: escolha o estado e, se quiser, o município e a zona eleitoral para ver os votos de cada um.
   O mapa mostra os municípios do estado (malha do IBGE) e a tabela lista municípios ou zonas.
-- **Exterior**: abre direto na apuração total do exterior. Para ver um país, escolha-o no seletor
-  (o total do país é a soma das suas cidades); depois dá para escolher a cidade e a zona. O TSE publica o
-  exterior por cidade, e `js/exterior.js` diz a que país pertence cada cidade.
 
 Funciona no celular (iPhone/iOS e Android) e no computador, com tema claro/escuro. Pode ser adicionado à tela
 de início do celular como um aplicativo. Os dados se atualizam sozinhos a cada 30 segundos, e cada tela tem
@@ -46,7 +43,7 @@ Eleição `6258` (Presidente, 2º turno, 25/10/2026), ciclo `ele2026`:
 | Eleições/ciclos | `/oficial/comum/config/ele-c.json` |
 | Estados, municípios e zonas | `/oficial/ele2026/6258/config/mun-e006258-cm.json` |
 | Brasil | `/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.json` |
-| Estado (`zz` = exterior) | `/oficial/ele2026/6258/dados/sp/sp-c0001-e006258-u.json` |
+| Estado | `/oficial/ele2026/6258/dados/sp/sp-c0001-e006258-u.json` |
 | Município | `/oficial/ele2026/6258/dados/sp/sp71072-c0001-e006258-u.json` |
 | Zona eleitoral | `/oficial/ele2026/6258/dados/sp/sp71072-z0001-c0001-e006258-u.json` |
 | Foto do candidato | `/oficial/ele2026/6258/fotos/br/<sqcand>.jpeg` |

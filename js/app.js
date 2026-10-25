@@ -9,8 +9,7 @@
 
   const S = {
     ufs: [],             // configuração: [{cd, nome, mu:[{cd, cdi, nome, capital, zonas}]}]
-    sel: { uf: null, pais: null, mu: null, zona: null },
-    paises: [],          // exterior agrupado: [{slug, nome, cidades:[município da config]}]
+    sel: { uf: null, mu: null, zona: null },
     aba: 'br',
     atual: null,         // resultado da região selecionada
     porUF: {},           // uf -> resultado
@@ -24,55 +23,13 @@
     mapaMunUF: null,     // UF cujo mapa municipal está desenhado
     muCarregado: new Set(), // UFs cujos municípios já foram baixados ao menos uma vez
     muEmCurso: new Set(),
-    brasil: null,        // resultado do Brasil (inclui o exterior)
-    indice: null,        // andamento por abrangência, do índice do TSE
     fotos: {}
   };
 
   // ---------- Utilidades de configuração ----------
   const ufCfg = uf => S.ufs.find(u => u.cd === uf) || null;
   const muCfg = (uf, mu) => { const u = ufCfg(uf); return u ? u.mu.find(m => m.cd === mu) || null : null; };
-  const nomeUF = uf => (uf === 'zz' ? 'Exterior' : (ufCfg(uf) || {}).nome || uf.toUpperCase());
-  const paisCfg = slug => S.paises.find(p => p.slug === slug) || null;
-  const paisDoMu = mu => S.paises.find(p => p.cidades.some(m => m.cd === mu)) || null;
-
-  // O TSE publica o exterior por cidade; aqui as cidades são agrupadas por país.
-  function montarPaises() {
-    const u = ufCfg('zz');
-    const grupos = {};
-    for (const m of u ? u.mu : []) {
-      const nome = EXTERIOR.paisDaCidade(m.nome, m.pais);
-      (grupos[nome] || (grupos[nome] = [])).push(m);
-    }
-    S.paises = Object.entries(grupos).map(([nome, cidades]) => ({ slug: EXTERIOR.slug(nome), nome, cidades }))
-      .sort((a, b) => (a.nome === EXTERIOR.OUTROS) - (b.nome === EXTERIOR.OUTROS) || a.nome.localeCompare(b.nome, 'pt-BR'));
-  }
-
-  // Soma os resultados de várias cidades (total de um país).
-  function somarResultados(lista) {
-    const r = vazioPlacar();
-    const campos = ['eleitorado', 'comparecimento', 'abstencao', 'validos', 'brancos', 'nulos'];
-    let total = 0, apuradas = 0, algum = false;
-    for (const x of lista) {
-      if (!x) continue;
-      algum = true;
-      r.lula.votos += x.lula.votos; r.flavio.votos += x.flavio.votos;
-      total += x.secoes.total || 0; apuradas += x.secoes.apuradas || 0;
-      for (const c of campos) if (x[c] != null) r[c] = (r[c] || 0) + x[c];
-      if (x.lula.sqcand) r.lula.sqcand = x.lula.sqcand;
-      if (x.flavio.sqcand) r.flavio.sqcand = x.flavio.sqcand;
-      if (x.atualizado && (!r.atualizado || dataTSE(x.atualizado) > dataTSE(r.atualizado))) r.atualizado = x.atualizado;
-    }
-    r.soma = r.lula.votos + r.flavio.votos;
-    r.lula.pct = r.soma ? r.lula.votos / r.soma * 100 : 0;
-    r.flavio.pct = r.soma ? r.flavio.votos / r.soma * 100 : 0;
-    r.secoes = { total: total || null, apuradas: total ? apuradas : null, pct: total ? apuradas / total * 100 : 0 };
-    if (!algum) r.semArquivo = true;
-    return r;
-  }
-  // "25/10/2026 20:11:05" → número comparável
-  const dataTSE = t => { const m = /(\d+)\/(\d+)\/(\d+)\s+(\d+):(\d+):(\d+)/.exec(t || ''); return m ? +(m[3] + m[2] + m[1] + m[4] + m[5] + m[6]) : 0; };
-
+  const nomeUF = uf => (ufCfg(uf) || {}).nome || uf.toUpperCase();
   // ---------- Cores ----------
   function faixa(p) { return p >= 70 ? 4 : p >= 60 ? 3 : p >= 55 ? 2 : 1; }
   function cor(r) {
@@ -88,24 +45,21 @@
   // ---------- Rotas (#/uf/sp/mu/71072/zona/0001) ----------
   function hashDe(sel, aba) {
     if (!sel.uf) return aba === 'uf' ? '#/uf' : '#/br';
-    let h = sel.uf === 'zz' ? '#/zz' : '#/uf/' + sel.uf;
-    if (sel.uf === 'zz' && sel.pais) h += '/pais/' + sel.pais;
+    let h = '#/uf/' + sel.uf;
     if (sel.mu) h += '/mu/' + sel.mu;
     if (sel.mu && sel.zona) h += '/zona/' + sel.zona;
     return h;
   }
   function irPara(sel, aba) {
-    const h = hashDe(sel, aba || (sel.uf === 'zz' ? 'zz' : sel.uf ? 'uf' : 'br'));
+    const h = hashDe(sel, aba || (sel.uf ? 'uf' : 'br'));
     if (location.hash === h) aplicarRota(); else location.hash = h;
   }
   function lerRota() {
     const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
-    const sel = { uf: null, pais: null, mu: null, zona: null };
+    const sel = { uf: null, mu: null, zona: null };
     let aba = 'br';
-    if (p[0] === 'zz') { sel.uf = 'zz'; aba = 'zz'; p.shift(); }
-    else if (p[0] === 'uf') { aba = 'uf'; if (p[1]) sel.uf = p[1].toLowerCase(); p.splice(0, 2); }
+    if (p[0] === 'uf') { aba = 'uf'; if (p[1]) sel.uf = p[1].toLowerCase(); p.splice(0, 2); }
     for (let i = 0; i < p.length; i += 2) {
-      if (p[i] === 'pais') sel.pais = p[i + 1] || null;
       if (p[i] === 'mu') sel.mu = p[i + 1] || null;
       if (p[i] === 'zona') sel.zona = p[i + 1] || null;
     }
@@ -113,16 +67,11 @@
     if (sel.uf && S.ufs.length && !ufCfg(sel.uf)) { sel.uf = null; sel.mu = null; }
     if (sel.mu && S.ufs.length && !muCfg(sel.uf, sel.mu)) sel.mu = null;
     if (!sel.mu) sel.zona = null;
-    if (sel.uf !== 'zz') sel.pais = null;
-    else if (S.paises.length) {
-      if (sel.mu) sel.pais = (paisDoMu(sel.mu) || {}).slug || null; // cidade escolhida pela busca: descobre o país
-      else if (sel.pais && !paisCfg(sel.pais)) sel.pais = null;
-    }
     return { sel, aba };
   }
   function aplicarRota() {
     const { sel, aba } = lerRota();
-    const mudouUF = sel.uf !== S.sel.uf || sel.pais !== S.sel.pais;
+    const mudouUF = sel.uf !== S.sel.uf;
     S.sel = sel; S.aba = aba;
     if (mudouUF) $('filtro-tabela').value = '';
     atualizarControles();
@@ -133,71 +82,51 @@
   function preencherEstados() {
     const sel = $('sel-uf');
     sel.innerHTML = '<option value="">Selecione o estado</option>' + S.ufs
-      .filter(u => u.cd !== 'zz')
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      .slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
       .map(u => `<option value="${u.cd}">${esc(u.nome)} (${u.cd.toUpperCase()})</option>`).join('');
   }
 
   function atualizarControles() {
-    const { uf, pais, mu, zona } = S.sel;
+    const { uf, mu, zona } = S.sel;
     document.querySelectorAll('.aba').forEach(b => b.setAttribute('aria-selected', String(b.dataset.aba === S.aba)));
-    const exterior = S.aba === 'zz';
     $('filtros').hidden = S.aba === 'br';
-    $('campo-uf').hidden = exterior;
-    $('campo-pais').hidden = !exterior;
-    $('rotulo-mu').textContent = exterior ? 'Cidade' : 'Município';
-    $('sel-uf').value = uf && uf !== 'zz' ? uf : '';
-    $('sel-pais').value = pais || '';
+    $('sel-uf').value = uf || '';
 
     const u = uf ? ufCfg(uf) : null;
-    const p = pais ? paisCfg(pais) : null;
     const m = mu ? muCfg(uf, mu) : null;
 
-    // O que aparece em cada aba:
-    //  Brasil   → placar geral (Brasil + exterior) e mapa por estado
-    //  Estados  → lista de estados; depois placar, mapa municipal e tabela de municípios/zonas
-    //  Exterior → primeiro só o total do exterior; depois país → cidades → zonas
+    // Brasil  → placar geral (total oficial do TSE, que já inclui os votos do exterior) e mapa por estado
+    // Estados → lista de estados; depois placar, mapa municipal e tabela de municípios/zonas
     const listaEstados = S.aba === 'uf' && !uf;
     $('sec-placar').hidden = listaEstados;
-    $('sec-mapa').hidden = listaEstados || exterior;
-    $('sec-tabela').hidden = S.aba === 'br' || (exterior && !p && !m) || (exterior && m && m.zonas.length < 2);
+    $('sec-mapa').hidden = listaEstados;
+    $('sec-tabela').hidden = S.aba === 'br';
     $('dica-aba').hidden = S.aba !== 'br';
-    $('dica-pais').hidden = !(exterior && !p && !m);
 
     const busca = $('busca-mu');
     busca.disabled = !u;
-    busca.placeholder = u ? (exterior ? 'Buscar cidade…' : 'Buscar município…') : 'Escolha o estado antes';
+    busca.placeholder = u ? 'Buscar município…' : 'Escolha o estado antes';
     busca.value = m ? m.nome : '';
     $('limpar-mu').hidden = !busca.value;
     fecharSugestoes();
 
     const sz = $('sel-zona');
     sz.disabled = !m || !m.zonas.length;
-    sz.innerHTML = '<option value="">' + (m ? 'Todas as zonas' : exterior ? 'Escolha uma cidade' : 'Escolha um município') + '</option>' +
+    sz.innerHTML = '<option value="">' + (m ? 'Todas as zonas' : 'Escolha um município') + '</option>' +
       (m ? m.zonas.map(z => `<option value="${z}">Zona ${z}</option>`).join('') : '');
     sz.value = zona || '';
 
-    // Trilha: Estados › São Paulo › Campinas › Zona 0033  (ou Exterior › Japão › Tóquio)
+    // Trilha: Estados › São Paulo › Campinas › Zona 0033
     const partes = [];
-    $('trilha').hidden = S.aba === 'br'; // na página inicial o placar já diz "Brasil + exterior"
+    $('trilha').hidden = S.aba === 'br';
     if (S.aba !== 'br') {
       const link = (txt, sel, ativo) => (ativo ? `<a href="${hashDe(sel, S.aba)}">${esc(txt)}</a>` : `<strong>${esc(txt)}</strong>`);
-      if (exterior) {
-        partes.push(link('Exterior', { uf: 'zz' }, p || m));
-        if (p) partes.push(link(p.nome, { uf: 'zz', pais }, m));
-      } else {
-        partes.push(link('Estados', { uf: null }, uf));
-        if (uf) partes.push(link(nomeUF(uf), { uf }, m));
-      }
-      if (m) partes.push(link(m.nome, { uf, pais, mu }, zona));
+      partes.push(link('Estados', { uf: null }, uf));
+      if (uf) partes.push(link(nomeUF(uf), { uf }, m));
+      if (m) partes.push(link(m.nome, { uf, mu }, zona));
       if (zona) partes.push(`<strong>Zona ${esc(zona)}</strong>`);
     }
     $('trilha').innerHTML = partes.join('<span class="sep">›</span>');
-  }
-
-  function preencherPaises() {
-    $('sel-pais').innerHTML = '<option value="">Todos os países (total)</option>' +
-      S.paises.map(p => `<option value="${p.slug}">${esc(p.nome)}</option>`).join('');
   }
 
   // ---------- Busca de município / cidade (lista própria: o <datalist> funciona mal no iPhone) ----------
@@ -212,8 +141,7 @@
     const atual = S.sel.mu ? muCfg(S.sel.uf, S.sel.mu) : null;
     const filtro = atual && busca.value === atual.nome ? '' : txt; // ao tocar no campo já preenchido, mostra todos
     const comeca = [], contem = [];
-    const p = S.sel.uf === 'zz' && S.sel.pais ? paisCfg(S.sel.pais) : null;
-    for (const m of p ? p.cidades : u.mu) {
+    for (const m of u.mu) {
       const nome = semAcento(m.nome);
       if (!filtro || nome.startsWith(filtro)) comeca.push(m);
       else if (nome.includes(filtro)) contem.push(m);
@@ -221,10 +149,7 @@
     sugestoes = comeca.concat(contem).slice(0, 60);
     sugAtiva = -1;
     lista.innerHTML = sugestoes.length
-      ? sugestoes.map((m, i) => {
-        const extra = S.sel.uf === 'zz' ? (p ? '' : esc((paisDoMu(m.cd) || {}).nome || '')) : m.capital ? 'capital' : '';
-        return `<li role="option" id="sug-${i}" data-i="${i}">${esc(m.nome)}${extra ? `<small>${extra}</small>` : ''}</li>`;
-      }).join('')
+      ? sugestoes.map((m, i) => `<li role="option" id="sug-${i}" data-i="${i}">${esc(m.nome)}${m.capital ? '<small>capital</small>' : ''}</li>`).join('')
       : '<li class="vazio" role="option" aria-disabled="true">Nenhum resultado</li>';
     lista.hidden = false;
     lista.scrollTop = 0;
@@ -240,7 +165,7 @@
     if (!m) return;
     fecharSugestoes();
     $('busca-mu').blur();
-    irPara({ uf: S.sel.uf, pais: S.sel.pais, mu: m.cd });
+    irPara({ uf: S.sel.uf, mu: m.cd });
   }
   function marcarSugestao(i) {
     const itens = $('sugestoes-mu').querySelectorAll('li[data-i]');
@@ -270,14 +195,14 @@
     busca.addEventListener('blur', () => setTimeout(() => {
       fecharSugestoes();
       const atual = S.sel.mu ? muCfg(S.sel.uf, S.sel.mu) : null;
-      if (busca.value.trim() === '' && atual) irPara({ uf: S.sel.uf, pais: S.sel.pais });
+      if (busca.value.trim() === '' && atual) irPara({ uf: S.sel.uf });
       else busca.value = atual ? atual.nome : '';
       $('limpar-mu').hidden = !busca.value;
     }, 200));
     $('limpar-mu').addEventListener('click', () => {
       busca.value = '';
       $('limpar-mu').hidden = true;
-      if (S.sel.mu) irPara({ uf: S.sel.uf, pais: S.sel.pais });
+      if (S.sel.mu) irPara({ uf: S.sel.uf });
       else busca.focus();
     });
     document.addEventListener('click', e => { if (!e.target.closest('.busca')) fecharSugestoes(); });
@@ -287,14 +212,12 @@
     document.querySelectorAll('.aba').forEach(b => b.addEventListener('click', () => {
       const aba = b.dataset.aba;
       if (aba === 'br') irPara({ uf: null }, 'br');
-      else if (aba === 'zz') irPara({ uf: 'zz' }, 'zz');
-      else irPara({ uf: S.sel.uf && S.sel.uf !== 'zz' ? S.sel.uf : null }, 'uf');
+      else irPara({ uf: S.sel.uf || null }, 'uf');
     }));
     $('ir-estados').addEventListener('click', () => { irPara({ uf: null }, 'uf'); scrollTo(0, 0); });
     $('sel-uf').addEventListener('change', e => irPara({ uf: e.target.value || null }, 'uf'));
-    $('sel-pais').addEventListener('change', e => irPara({ uf: 'zz', pais: e.target.value || null }, 'zz'));
     ligarBusca();
-    $('sel-zona').addEventListener('change', e => irPara({ uf: S.sel.uf, pais: S.sel.pais, mu: S.sel.mu, zona: e.target.value || null }));
+    $('sel-zona').addEventListener('change', e => irPara({ uf: S.sel.uf, mu: S.sel.mu, zona: e.target.value || null }));
     $('btn-atualizar').addEventListener('click', () => atualizar(true));
     $('filtro-tabela').addEventListener('input', renderTabela);
     document.querySelectorAll('#tabela th[data-ord]').forEach(th => th.addEventListener('click', () => {
@@ -315,24 +238,18 @@
 
   // ---------- Placar ----------
   function tituloLocal() {
-    const { uf, pais, mu, zona } = S.sel;
+    const { uf, mu, zona } = S.sel;
     if (!uf) return 'Brasil';
     const m = mu ? muCfg(uf, mu) : null;
-    if (uf === 'zz') {
-      const p = pais ? paisCfg(pais) : null;
-      const local = m ? `${m.nome}${p && p.nome !== EXTERIOR.OUTROS ? ' – ' + p.nome : ''}` : p ? p.nome : 'Exterior';
-      return zona && m ? `Zona ${zona} · ${local}` : local;
-    }
-    const sufixo = uf === 'zz' ? 'Exterior' : uf.toUpperCase();
+    const sufixo = uf.toUpperCase();
     if (zona && m) return `Zona ${zona} · ${m.nome} – ${sufixo}`;
     if (m) return `${m.nome} – ${sufixo}`;
-    return uf === 'zz' ? 'Exterior' : `${nomeUF(uf)} (${sufixo})`;
+    return `${nomeUF(uf)} (${sufixo})`;
   }
 
   function renderPlacar(r) {
     $('titulo-local').textContent = tituloLocal();
-    $('sobretitulo').textContent = !S.sel.uf ? 'Resultado geral · Brasil + exterior'
-      : S.sel.uf === 'zz' && !S.sel.pais && !S.sel.mu ? 'Apuração total no exterior' : 'Resultado em';
+    $('sobretitulo').textContent = S.sel.uf ? 'Resultado em' : 'Resultado geral';
     const { lula, flavio } = r;
     const temVotos = r.soma > 0;
     const pl = temVotos ? lula.pct : 50, pf = temVotos ? flavio.pct : 50;
@@ -347,7 +264,7 @@
     const dif = Math.abs(lula.votos - flavio.votos);
     const dv = $('dif-votos');
     if (!temVotos) {
-      dv.textContent = r.semVotos ? 'O TSE ainda não publicou os votos por candidato' : r.semArquivo ? 'Aguardando dados do TSE' : 'Aguardando votos apurados';
+      dv.textContent = r.semArquivo ? 'Aguardando dados do TSE' : 'Aguardando votos apurados';
       dv.style.color = '';
     }
     else if (!dif) { dv.textContent = 'Empate'; dv.style.color = ''; }
@@ -357,12 +274,10 @@
       dv.style.color = l ? 'var(--lula)' : 'var(--flavio)';
     }
 
-    // Sem votos por candidato publicados (exterior com arquivo desatualizado): mostra "—", não 0%.
-    $('pct-lula').textContent = r.semVotos ? '—' : pct(lula.pct);
-    $('pct-flavio').textContent = r.semVotos ? '—' : pct(flavio.pct);
-    $('votos-lula').textContent = r.semVotos ? '—' : n(lula.votos);
-    $('votos-flavio').textContent = r.semVotos ? '—' : n(flavio.votos);
-    if (r.semVotos) { $('votos-lula-barra').textContent = '— votos'; $('votos-flavio-barra').textContent = '— votos'; }
+    $('pct-lula').textContent = pct(lula.pct);
+    $('pct-flavio').textContent = pct(flavio.pct);
+    $('votos-lula').textContent = n(lula.votos);
+    $('votos-flavio').textContent = n(flavio.votos);
 
     const v = vencedor(r);
     const completo = r.secoes.total > 0 && r.secoes.apuradas >= r.secoes.total;
@@ -394,23 +309,7 @@
     $('n-validos').innerHTML = comPct(r.validos, total);
     $('n-brancos').innerHTML = comPct(r.brancos, total);
     $('n-nulos').innerHTML = comPct(r.nulos, total);
-    $('hora-tse').textContent = (r.atualizado ? 'gerado em ' + r.atualizado : (r.semArquivo ? 'arquivo ainda não publicado' : '—')) +
-      (r.calculado ? ' · total do exterior calculado como total do Brasil menos a soma dos estados, porque o arquivo do exterior no TSE está desatualizado' : '');
-
-    // País/cidade do exterior zerados enquanto o exterior já tem votos: o TSE ainda não atualizou esses arquivos.
-    const aviso = $('aviso-dados');
-    const ext = S.sel.uf === 'zz' && (S.sel.pais || S.sel.mu) ? exteriorTotal() : null;
-    if (r.semVotos) {
-      aviso.textContent = `O TSE já registra ${n(r.secoes.apuradas)} de ${n(r.secoes.total)} seções apuradas no exterior, ` +
-        'mas ainda não atualizou o arquivo com os votos de cada candidato no exterior. ' +
-        'Os percentuais aparecem aqui sozinhos assim que o TSE publicar.';
-      aviso.hidden = false;
-    } else if (ext && ext.secoes.apuradas > 0 && !r.secoes.apuradas) {
-      aviso.innerHTML = 'O TSE ainda não publicou os votos por país e cidade do exterior: os arquivos dessas cidades continuam ' +
-        'zerados. O andamento do exterior aparece em <a href="#/zz">Exterior › Todos os países</a>. ' +
-        'Quando o TSE publicar, os números aparecem aqui sozinhos.';
-      aviso.hidden = false;
-    } else aviso.hidden = true;
+    $('hora-tse').textContent = r.atualizado ? 'gerado em ' + r.atualizado : (r.semArquivo ? 'arquivo ainda não publicado' : '—');
   }
 
   function mostrarFoto(k) {
@@ -568,14 +467,14 @@
   }
 
   function renderPlacarMapa() {
-    const lista = S.sel.uf ? Object.values(S.porMu[S.sel.uf] || {}) : S.ufs.filter(u => u.cd !== 'zz').map(u => S.porUF[u.cd]);
+    const lista = S.sel.uf ? Object.values(S.porMu[S.sel.uf] || {}) : S.ufs.map(u => S.porUF[u.cd]);
     const venc = { l: 0, f: 0 };
     lista.forEach(r => { const v = vencedor(r); if (v) venc[v]++; });
     const rotulo = S.sel.uf ? 'municípios' : 'estados';
     let html = `<div class="contagem">
       <div class="c-l"><strong>${venc.l}</strong><span>${rotulo} com Lula à frente</span></div>
       <div class="c-f"><strong>${venc.f}</strong><span>${rotulo} com Flávio à frente</span></div></div>`;
-    if (S.sel.uf && S.sel.uf !== 'zz' && S.porUF[S.sel.uf]) {
+    if (S.sel.uf && S.porUF[S.sel.uf]) {
       const r = S.porUF[S.sel.uf];
       html += `<div class="mini-placar"><h3>Total de ${esc(nomeUF(S.sel.uf))}</h3>
         <div class="linha"><span style="color:var(--lula)">Lula</span><b>${pct(r.lula.pct)}</b></div>
@@ -593,7 +492,6 @@
       if (S.mapaMunUF || S.mapaBrasilAba !== S.aba || !$('mapa').querySelector('svg[aria-label^="Mapa do Brasil"]')) desenharMapaBrasil(); else pintarMapa();
       return;
     }
-    if (uf === 'zz') { aviso.hidden = true; return; } // o exterior não tem mapa
     $('titulo-mapa').textContent = `Municípios de ${nomeUF(uf)}`;
     $('sub-mapa').textContent = 'Cada município pintado com a cor de quem está à frente. Toque para ver os detalhes.';
     if (S.mapaMunUF === uf) { pintarMapa(); return; }
@@ -613,20 +511,15 @@
 
   // ---------- Tabela ----------
   function linhasTabela() {
-    const { uf, pais, mu } = S.sel;
+    const { uf, mu } = S.sel;
     if (!uf) {
-      const l = S.ufs.filter(u => u.cd !== 'zz').map(u => ({ chave: u.cd, nome: u.nome, sub: u.cd.toUpperCase(), r: S.porUF[u.cd], destino: { uf: u.cd } }));
+      const l = S.ufs.map(u => ({ chave: u.cd, nome: u.nome, sub: u.cd.toUpperCase(), r: S.porUF[u.cd], destino: { uf: u.cd } }));
       return l;
     }
     if (mu) {
       const m = muCfg(uf, mu);
       const dados = S.porZona[uf + mu] || {};
-      return (m ? m.zonas : []).map(z => ({ chave: z, nome: 'Zona ' + z, sub: m.nome, r: dados[z], destino: { uf, pais, mu, zona: z } }));
-    }
-    if (uf === 'zz') {
-      const p = paisCfg(pais);
-      const dados = S.porMu.zz || {};
-      return (p ? p.cidades : []).map(m => ({ chave: m.cd, nome: m.nome, sub: '', r: dados[m.cd], destino: { uf, pais, mu: m.cd } }));
+      return (m ? m.zonas : []).map(z => ({ chave: z, nome: 'Zona ' + z, sub: m.nome, r: dados[z], destino: { uf, mu, zona: z } }));
     }
     const u = ufCfg(uf);
     const dados = S.porMu[uf] || {};
@@ -635,13 +528,11 @@
 
   function renderTabela() {
     const { uf, mu, zona } = S.sel;
-    const p = uf === 'zz' && S.sel.pais ? paisCfg(S.sel.pais) : null;
-    $('titulo-tabela').textContent = !uf ? 'Escolha um estado' : mu ? 'Resultado por zona eleitoral'
-      : p ? `Resultado por cidade · ${p.nome}` : `Resultado por município · ${nomeUF(uf)}`;
+    $('titulo-tabela').textContent = !uf ? 'Escolha um estado' : mu ? 'Resultado por zona eleitoral' : `Resultado por município · ${nomeUF(uf)}`;
     const sub = $('sub-tabela');
-    sub.hidden = !!(uf && !mu && !p);
+    sub.hidden = !!(uf && !mu);
     sub.textContent = !uf ? 'Toque em um estado para ver o resultado dele, dos municípios e das zonas eleitorais.'
-      : p ? 'Toque em uma cidade para ver o resultado dela.' : 'Toque em uma zona para ver o resultado dela.';
+      : 'Toque em uma zona para ver o resultado dela.';
     const filtro = $('filtro-tabela').value.trim().toLowerCase();
     let linhas = linhasTabela().filter(l => !filtro || l.nome.toLowerCase().includes(filtro) || (l.sub || '').toLowerCase().includes(filtro));
     const { campo, dir } = S.ordem;
@@ -683,56 +574,15 @@
   const completo = r => r && r.secoes.total > 0 && r.secoes.apuradas >= r.secoes.total;
 
   async function carregarUFs() {
-    const lista = S.ufs.map(u => u.cd).concat(['br', 'indice']);
-    await TSE.emLotes(lista, 6, async uf => {
+    await TSE.emLotes(S.ufs.map(u => u.cd), 6, async uf => {
       try {
-        if (uf === 'br') S.brasil = await TSE.resultado(null);
-        else if (uf === 'indice') S.indice = await TSE.indice();
-        else { S.porUF[uf] = await TSE.resultado(uf); pintarMapa(); agendarTabela(); }
+        S.porUF[uf] = await TSE.resultado(uf);
+        pintarMapa(); agendarTabela();
       } catch (e) { /* mantém o último valor conhecido */ }
     });
   }
 
-  // Total do exterior. O TSE às vezes demora a atualizar o arquivo do exterior (zz), embora o
-  // total do Brasil já inclua esses votos. Nesse caso o exterior é calculado como
-  // Brasil − soma dos 27 estados, desde que o número de seções bata com o índice do TSE.
-  function exteriorTotal() {
-    const zz = S.porUF.zz, idx = S.indice && S.indice.zz;
-    if (!zz || !idx || idx.apuradas == null || (zz.secoes.apuradas || 0) >= idx.apuradas) return zz || null;
-    const calc = exteriorPorDiferenca();
-    if (calc && calc.secoes.apuradas === idx.apuradas) return calc;
-    // Sem como calcular os votos: mostra só o andamento informado pelo índice.
-    return Object.assign(vazioPlacar(), {
-      eleitorado: idx.eleitorado != null ? idx.eleitorado : zz.eleitorado,
-      comparecimento: idx.comparecimento, abstencao: idx.abstencao,
-      secoes: { total: idx.total, apuradas: idx.apuradas, pct: idx.total ? idx.apuradas / idx.total * 100 : 0 },
-      atualizado: zz.atualizado, semVotos: true
-    });
-  }
-
-  function exteriorPorDiferenca() {
-    const br = S.brasil;
-    const estados = S.ufs.filter(u => u.cd !== 'zz').map(u => S.porUF[u.cd]);
-    if (!br || estados.some(r => !r)) return null;
-    const est = somarResultados(estados);
-    const dif = (a, b) => (a == null || b == null ? null : a - b);
-    const r = vazioPlacar();
-    r.lula.votos = br.lula.votos - est.lula.votos;
-    r.flavio.votos = br.flavio.votos - est.flavio.votos;
-    r.lula.sqcand = br.lula.sqcand; r.flavio.sqcand = br.flavio.sqcand;
-    for (const c of ['eleitorado', 'comparecimento', 'abstencao', 'validos', 'brancos', 'nulos']) r[c] = dif(br[c], est[c]);
-    const total = dif(br.secoes.total, est.secoes.total), apuradas = dif(br.secoes.apuradas, est.secoes.apuradas || 0);
-    if ([r.lula.votos, r.flavio.votos, total, apuradas].some(x => x == null || x < 0)) return null;
-    r.soma = r.lula.votos + r.flavio.votos;
-    r.lula.pct = r.soma ? r.lula.votos / r.soma * 100 : 0;
-    r.flavio.pct = r.soma ? r.flavio.votos / r.soma * 100 : 0;
-    r.secoes = { total, apuradas, pct: total ? apuradas / total * 100 : 0 };
-    r.atualizado = br.atualizado;
-    r.calculado = true;
-    return r;
-  }
-
-  // Baixa os municípios da UF (ou as cidades do exterior). Continua mesmo se o usuário
+  // Baixa os municípios da UF. Continua mesmo se o usuário
   // navegar dentro da mesma UF; para se ele trocar de UF.
   async function carregarMunicipios(uf) {
     const u = ufCfg(uf);
@@ -764,17 +614,6 @@
     }
   }
 
-  // Total de um país do exterior = soma das suas cidades.
-  async function carregarPais(slug) {
-    const p = paisCfg(slug);
-    if (!p) return vazioPlacar();
-    const dados = S.porMu.zz || (S.porMu.zz = {});
-    await TSE.emLotes(p.cidades.filter(m => !completo(dados[m.cd])), 6, async m => {
-      try { dados[m.cd] = await TSE.resultado('zz', m.cd); } catch (e) { /* tenta de novo na próxima rodada */ }
-    });
-    return somarResultados(p.cidades.map(m => dados[m.cd]));
-  }
-
   async function carregarZonas(uf, mu, geracao) {
     const m = muCfg(uf, mu);
     if (!m) return;
@@ -788,14 +627,13 @@
 
   async function carregarVista(navegacao) {
     const geracao = navegacao ? ++S.geracao : S.geracao;
-    const { uf, pais, mu, zona } = S.sel;
+    const { uf, mu, zona } = S.sel;
     const listaEstados = S.aba === 'uf' && !uf; // aba Estados antes de escolher o estado
-    const totalPais = uf === 'zz' && pais && !mu; // país do exterior: soma das cidades
     if (navegacao) {
       // Mostra imediatamente o que já está em memória.
       if (!listaEstados) {
         const cache = zona ? (S.porZona[uf + mu] || {})[zona] : mu ? (S.porMu[uf] || {})[mu]
-          : totalPais ? null : uf === 'zz' ? exteriorTotal() : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
+          : uf ? S.porUF[uf] : S.atual && S.atual.br ? S.atual : null;
         renderPlacar(cache || vazioPlacar());
         prepararMapa(geracao);
       }
@@ -804,22 +642,22 @@
     girar(true);
     try {
       if (!listaEstados) {
-        const r = totalPais ? await carregarPais(pais) : await TSE.resultado(uf, mu, zona);
+        // Brasil: arquivo oficial do TSE (br), que já inclui os votos do exterior.
+        const r = await TSE.resultado(uf, mu, zona);
         if (geracao !== S.geracao) return;
-        if (!uf) { r.br = true; S.brasil = r; }
+        if (!uf) r.br = true;
         S.atual = r;
         if (zona) (S.porZona[uf + mu] || (S.porZona[uf + mu] = {}))[zona] = r;
         else if (mu) (S.porMu[uf] || (S.porMu[uf] = {}))[mu] = r;
-        else if (uf && !totalPais) S.porUF[uf] = r;
-        renderPlacar(uf === 'zz' && !pais && !mu ? exteriorTotal() || r : r);
+        else if (uf) S.porUF[uf] = r;
+        renderPlacar(r);
       }
       status('vivo');
 
       const tarefas = [];
-      // O mapa do Brasil precisa dos 27 estados + exterior; o placar do estado usa o total da UF.
-      // O exterior também precisa do Brasil, dos estados e do índice (ver exteriorTotal).
-      if (!uf || uf === 'zz' || Object.keys(S.porUF).length < S.ufs.length || (!navegacao && S.ciclos % 2 === 0)) tarefas.push(carregarUFs());
-      if (uf && uf !== 'zz') {
+      // O mapa do Brasil precisa dos 27 estados; o placar do estado usa o total da UF.
+      if (!uf || Object.keys(S.porUF).length < S.ufs.length || (!navegacao && S.ciclos % 2 === 0)) tarefas.push(carregarUFs());
+      if (uf) {
         const recarregarTudo = !navegacao && S.ciclos % 3 === 0; // municípios: a cada ~90 s
         if (!S.muCarregado.has(uf) || recarregarTudo) tarefas.push(carregarMunicipios(uf));
       }
@@ -827,8 +665,7 @@
       await Promise.all(tarefas);
       if (geracao !== S.geracao) return;
       renderTabela();
-      if (uf === 'zz') renderPlacar(!pais && !mu ? exteriorTotal() || S.atual : S.atual);
-      else if (!listaEstados) pintarMapa();
+      if (!listaEstados) pintarMapa();
     } catch (e) {
       if (geracao !== S.geracao) return;
       status('erro', e);
@@ -912,7 +749,9 @@
     $('status-texto').textContent = TSE.info.demo ? 'Iniciando simulação…' : 'Conectando ao TSE…';
     try {
       await TSE.iniciar();
-      S.ufs = await TSE.configuracao();
+      // Só os 27 estados; o exterior (zz) não tem aba própria, mas seus votos continuam no total
+      // do Brasil, que vem do arquivo oficial do TSE.
+      S.ufs = (await TSE.configuracao()).filter(u => u.cd !== 'zz');
       if (!S.ufs.length) throw new Error('Configuração vazia');
     } catch (e) {
       avisoFalha(e);
@@ -921,8 +760,6 @@
     $('turno-label').textContent = TSE.info.turno === 1 ? '1º turno' : '2º turno';
     if (TSE.info.demo) avisoDemo();
     preencherEstados();
-    montarPaises();
-    preencherPaises();
     S.contador = INTERVALO;
     S.mapaMunUF = null;
     $('mapa').innerHTML = '';

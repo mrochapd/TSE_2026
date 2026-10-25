@@ -5,7 +5,7 @@
 //   /oficial/comum/config/ele-c.json                                  eleições e ciclos
 //   /oficial/ele2026/6258/config/mun-e006258-cm.json                  estados, municípios e zonas
 //   /oficial/ele2026/6258/dados/br/br-c0001-e006258-u.json            Brasil
-//   /oficial/ele2026/6258/dados/sp/sp-c0001-e006258-u.json            estado (zz = exterior)
+//   /oficial/ele2026/6258/dados/sp/sp-c0001-e006258-u.json            estado
 //   /oficial/ele2026/6258/dados/sp/sp71072-c0001-e006258-u.json       município
 //   /oficial/ele2026/6258/dados/sp/sp71072-z0001-c0001-e006258-u.json zona eleitoral
 //   /oficial/ele2026/6258/fotos/br/<sqcand>.jpeg                       foto do candidato
@@ -146,7 +146,7 @@
       nome: titulo(u.ds || u.nm || u.cd),
       mu: (Array.isArray(u.mu) ? u.mu : []).map(m => ({
         cd: String(m.cd), cdi: m.cdi ? String(m.cdi) : null, nome: titulo(m.nm || m.cd),
-        capital: m.c === 'S', pais: m.pais || m.nmp || m.nmpais || m.ps || null, zonas: (Array.isArray(m.z) ? m.z : []).map(z => String(z).padStart(4, '0'))
+        capital: m.c === 'S', zonas: (Array.isArray(m.z) ? m.z : []).map(z => String(z).padStart(4, '0'))
       })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     })).filter(u => u.cd);
   }
@@ -178,7 +178,7 @@
       return normalizarConfig(cfg);
     },
 
-    // uf: null (Brasil) | 'sp' | 'zz'; mu: código TSE do município; zona: '0001'
+    // uf: null (Brasil) | 'sp'; mu: código TSE do município; zona: '0001'
     async resultado(uf, mu, zona) {
       if (info.demo) return normalizar(window.DEMO.resultado(uf, mu, zona));
       const u = uf || 'br';
@@ -190,22 +190,6 @@
         if (e.status === 404 || e.status === 403) return Object.assign(vazio(), { semArquivo: true });
         throw e;
       }
-    },
-
-    // Índice de andamento do TSE (br-e006258-ab.json): seções apuradas e comparecimento de cada
-    // UF, do exterior (zz) e do Brasil. Serve para saber se o arquivo de resultado de alguma
-    // abrangência ficou desatualizado.
-    async indice() {
-      if (info.demo) return null;
-      const d = await pegarTSE(`/oficial/${info.ciclo}/${ELEICAO}/dados/br/br-${COD}-ab.json`);
-      const mapa = {};
-      for (const a of Array.isArray(obj(d).abr) ? d.abr : []) {
-        const s = obj(a.s), e = obj(a.e);
-        mapa[String(a.cdabr).toLowerCase()] = {
-          apuradas: num(s.st), total: num(s.ts), eleitorado: num(e.te), comparecimento: num(e.c), abstencao: num(e.a)
-        };
-      }
-      return mapa;
     },
 
     foto(sqcand) {
