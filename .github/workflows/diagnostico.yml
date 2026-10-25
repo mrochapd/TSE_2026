@@ -1,4 +1,4 @@
-# Temporário: baixa arquivos do TSE para conferir o formato dos dados do exterior.
+# Temporário: confere se o total do exterior pode ser calculado como Brasil − soma dos estados.
 name: Diagnóstico TSE
 
 on:
@@ -11,27 +11,24 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
     steps:
-      - name: Baixar e resumir arquivos
+      - name: Conferir cálculo do exterior
         run: |
-          B=https://resultados.tse.jus.br/oficial
-          E=6258; C=e006258
-          baixar() { echo; echo "=== $1"; code=$(curl -sS -A "Mozilla/5.0" -o "$2" -w "%{http_code}" "$1"); echo "HTTP $code  bytes $(wc -c < "$2")"; }
-          resumo() { jq -c '{chaves: keys, dg, hg, dt, ht, and, s, e, v, cand: [.. | objects | select(has("cand")) | .cand[]? | {n, nmu, nm, vap, pvap, sqcand, st, e}]}' "$1" 2>&1 | head -c 2500; echo; }
-
-          curto() { jq -c '{dg, hg, and, s: {ts: .s.ts, st: .s.st}, e: {te: .e.te, c: .e.c}, v: {vv: .v.vv}, cand: [.. | objects | select(has("cand")) | .cand[]? | {n, vap}]}' "$1" 2>&1 | head -c 600; echo; }
-          for i in 1 2; do
-            baixar $B/ele2026/$E/dados/br/br-c0001-$C-u.json br.json; curto br.json
-            baixar $B/ele2026/$E/dados/zz/zz-c0001-$C-u.json zz.json; curto zz.json
-            baixar "$B/ele2026/$E/dados/zz/zz-c0001-$C-u.json?t=$(date +%s)" zzq.json; curto zzq.json
-            baixar $B/ele2026/$E/dados/zz/zz30457-c0001-$C-u.json ams.json; curto ams.json
-            baixar $B/ele2026/$E/dados/sp/sp-c0001-$C-u.json sp.json; curto sp.json
-            baixar $B/ele2026/$E/dados/zz/zz-$C-ab.json zzab.json
-            echo "cidades do exterior com seções apuradas no índice:"; jq -c '[.abr[] | select((.s.st | tonumber) > 0) | {cdabr, st: .s.st, ts: .s.ts, c: .e.c}] | length, .[0:5]' zzab.json
-            jq -c '{dg, hg}' zzab.json
-            baixar $B/ele2026/$E/dados/br/br-$C-ab.json brab.json
-            jq -c '{dg, hg}, [.abr[] | select(.cdabr == "zz" or .cdabr == "br" or .cdabr == "sp") | {cdabr, and, dt, ht, st: .s.st, ts: .s.ts, c: .e.c}]' brab.json
-            sleep 20
+          B=https://resultados.tse.jus.br/oficial/ele2026/6258/dados
+          C=e006258
+          curl -sS $B/br/br-c0001-$C-u.json -o br.json
+          curl -sS $B/br/br-$C-ab.json -o ab.json
+          for uf in ac al ap am ba ce df es go ma mt ms mg pa pb pe pi rj rn rs ro rr sc sp se to; do
+            curl -sS $B/$uf/$uf-c0001-$C-u.json -o uf-$uf.json
           done
-          baixar $B/ele2026/$E/fotos/br/280002542548.jpeg foto.jpg; file foto.jpg
-          echo "--- cabeçalhos CORS do arquivo do exterior:"
-          curl -sS -I -H "Origin: https://mrochapd.github.io" $B/ele2026/$E/dados/zz/zz-c0001-$C-u.json | grep -i -E "^(HTTP|access-control|cache-control|content-type)"
+          echo "--- estados com seções apuradas (arquivo x índice):"
+          for f in uf-*.json; do uf=${f#uf-}; uf=${uf%.json}
+            jq -r --arg uf $uf --slurpfile ab ab.json '"\($uf): arquivo \(.s.st) | índice \($ab[0].abr[] | select(.cdabr == $uf) | .s.st) | gerado \(.dg) \(.hg)"' $f
+          done | grep -v "arquivo 0 | índice 0"
+          jq -s '
+            def v(n): [.. | objects | select(has("cand")) | .cand[]? | select(.n == n) | .vap | tonumber] | add;
+            (.[0]) as $br | (.[1:]) as $ufs |
+            { brasil: { st: ($br.s.st|tonumber), lula: ($br|v("13")), flavio: ($br|v("22")) },
+              estados: { st: ([$ufs[].s.st|tonumber]|add), lula: ([$ufs[]|v("13")]|add), flavio: ([$ufs[]|v("22")]|add) } }
+            | .exterior_calculado = { st: (.brasil.st - .estados.st), lula: (.brasil.lula - .estados.lula), flavio: (.brasil.flavio - .estados.flavio) }
+          ' br.json uf-*.json
+          echo "--- índice:"; jq -c '{dg, hg}, [.abr[] | select(.cdabr == "zz" or .cdabr == "br") | {cdabr, st: .s.st, c: .e.c}]' ab.json
