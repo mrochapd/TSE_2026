@@ -4,13 +4,17 @@ Site para acompanhar a apuração da eleição presidencial de 2026 — **Lula (
 com os dados oficiais publicados pelo TSE em
 [resultados.tse.jus.br](https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados).
 
-Duas abas:
+Três abas:
 
 - **Brasil** (página inicial): resultado geral do TSE, que já inclui os votos do exterior. Barra horizontal com
-  Lula (vermelho) à esquerda e Flávio (azul) à direita, fotos com o percentual de cada um e o mapa do Brasil
-  pintado pela cor de quem está à frente em cada estado.
+  Lula (vermelho) à esquerda e Flávio (azul) à direita, fotos com o percentual de cada um e um mapa que alterna
+  entre **Brasil** (estados) e **Mundo** (o Brasil e cada país com eleitores brasileiros), pintado pela cor de quem
+  está à frente.
 - **Estados**: escolha o estado e, se quiser, o município e a zona eleitoral para ver os votos de cada um.
   O mapa mostra os municípios do estado (malha do IBGE) e a tabela lista municípios ou zonas.
+- **Exterior**: abre na apuração total do exterior, com o mapa-múndi pintado país a país. Tocando num país (ou
+  escolhendo-o no seletor) aparece o total dele, que é a soma das suas cidades; depois dá para abrir a cidade e a
+  zona. O TSE publica o exterior por cidade; `js/exterior.js` diz a que país pertence cada uma das 186 cidades.
 
 Funciona no celular (iPhone/iOS e Android) e no computador, com tema claro/escuro. Pode ser adicionado à tela
 de início do celular como um aplicativo. Os dados se atualizam sozinhos a cada 30 segundos, e cada tela tem
@@ -43,7 +47,7 @@ Eleição `6258` (Presidente, 2º turno, 25/10/2026), ciclo `ele2026`:
 | Eleições/ciclos | `/oficial/comum/config/ele-c.json` |
 | Estados, municípios e zonas | `/oficial/ele2026/6258/config/mun-e006258-cm.json` |
 | Brasil | `/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.json` |
-| Estado | `/oficial/ele2026/6258/dados/sp/sp-c0001-e006258-u.json` |
+| Estado (`zz` = exterior) | `/oficial/ele2026/6258/dados/sp/sp-c0001-e006258-u.json` |
 | Município | `/oficial/ele2026/6258/dados/sp/sp71072-c0001-e006258-u.json` |
 | Zona eleitoral | `/oficial/ele2026/6258/dados/sp/sp71072-z0001-c0001-e006258-u.json` |
 | Foto do candidato | `/oficial/ele2026/6258/fotos/br/<sqcand>.jpeg` |
@@ -60,6 +64,8 @@ js/tse.js           leitura e normalização dos arquivos do TSE e da malha do I
 js/app.js           interface: placar, mapa, tabela, navegação e atualização automática
 js/demo.js          gerador de dados fictícios para o modo demonstração
 js/mapa-brasil.js   contornos dos estados (@svg-maps/brazil, CC BY 4.0)
+js/mapa-mundi.js    contornos dos países (Natural Earth 1:110m, domínio público, via world-atlas)
+js/exterior.js      cidade do exterior → país
 servidor.mjs        servidor estático + proxy opcional para TSE e IBGE
 ```
 

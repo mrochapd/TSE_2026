@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icones/icone-180.png">
   <link rel="manifest" href="manifest.webmanifest">
   <title>Apuração 2026 · Presidente</title>
-  <meta name="description" content="Acompanhe a apuração do 2º turno da eleição presidencial de 2026 (Lula x Flávio Bolsonaro) por Brasil, estado, município e zona eleitoral, com dados oficiais do TSE.">
+  <meta name="description" content="Acompanhe a apuração do 2º turno da eleição presidencial de 2026 (Lula x Flávio Bolsonaro) por Brasil, estado, município, zona eleitoral e exterior, com dados oficiais do TSE.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='16' height='32' fill='%23d62839'/%3E%3Crect x='16' width='16' height='32' fill='%231f5fbf'/%3E%3C/svg%3E">
   <link rel="icon" type="image/png" sizes="192x192" href="icones/icone-192.png">
   <link rel="stylesheet" href="css/style.css">
@@ -50,11 +50,18 @@
         <button type="button" role="tab" class="aba" data-aba="uf" aria-selected="false">
           <span aria-hidden="true">📍</span> Estados
         </button>
+        <button type="button" role="tab" class="aba" data-aba="zz" aria-selected="false">
+          <span aria-hidden="true">🌎</span> Exterior
+        </button>
       </div>
       <div class="filtros" id="filtros">
         <div class="campo" id="campo-uf">
           <label for="sel-uf">Estado</label>
           <select id="sel-uf"><option value="">Selecione o estado</option></select>
+        </div>
+        <div class="campo" id="campo-pais" hidden>
+          <label for="sel-pais">País</label>
+          <select id="sel-pais"><option value="">Todos os países</option></select>
         </div>
         <div class="campo" id="campo-mu">
           <label for="busca-mu" id="rotulo-mu">Município</label>
@@ -72,6 +79,7 @@
         </div>
       </div>
       <nav class="trilha" id="trilha" aria-label="Você está em"></nav>
+      <p class="dica-aba" id="dica-pais" hidden>Este é o total de votos no exterior. Para ver os votos de um país, escolha o país acima.</p>
     </section>
 
     <!-- Placar principal -->
@@ -98,6 +106,7 @@
           <div class="seg seg-flavio" id="seg-flavio"><span id="seg-flavio-pct"></span></div>
           <div class="marca-meio" aria-hidden="true"><span>50%</span></div>
         </div>
+        <p class="aviso-dados" id="aviso-dados" hidden></p>
         <div class="duelo-votos">
           <span id="votos-lula-barra">0 votos</span>
           <span id="dif-votos" class="dif"></span>
@@ -149,6 +158,10 @@
         <div>
           <h2 id="titulo-mapa">Onde cada candidato venceu</h2>
           <p class="sub" id="sub-mapa">Toque ou clique em um estado para ver os detalhes.</p>
+          <div class="alternar" id="alternar-mapa" role="group" aria-label="Tipo de mapa" hidden>
+            <button type="button" data-modo="brasil" aria-pressed="true">Brasil</button>
+            <button type="button" data-modo="mundo" aria-pressed="false">Mundo</button>
+          </div>
         </div>
         <div class="legenda" aria-label="Legenda do mapa">
           <div class="legenda-linha">
@@ -161,6 +174,7 @@
           </div>
           <div class="legenda-faixas"><span>50%</span><span>55%</span><span>60%</span><span>70%+</span></div>
           <div class="legenda-linha legenda-sem"><span class="quad"></span> Sem votos apurados</div>
+          <div class="legenda-linha legenda-sem legenda-fora" id="legenda-fora" hidden><span class="quad"></span> Sem seção eleitoral brasileira</div>
         </div>
       </div>
       <div class="mapa-area">
@@ -199,13 +213,15 @@
 
   <footer class="rodape">
     <p>Dados oficiais de <a href="https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados" target="_blank" rel="noopener">resultados.tse.jus.br</a>, atualizados automaticamente a cada 30 segundos. Site independente, sem vínculo com o TSE ou com as campanhas.</p>
-    <p class="rodape-mini">Mapa dos estados: @svg-maps/brazil (CC BY 4.0) · Mapas municipais: IBGE.</p>
+    <p class="rodape-mini">Mapa dos estados: @svg-maps/brazil (CC BY 4.0) · Mapa-múndi: Natural Earth · Mapas municipais: IBGE.</p>
   </footer>
 
   <div class="dica" id="dica" role="tooltip" hidden></div>
 
   <script src="js/mapa-brasil.js"></script>
+  <script src="js/mapa-mundi.js"></script>
   <script src="js/tse.js"></script>
+  <script src="js/exterior.js"></script>
   <script src="js/demo.js"></script>
   <script src="js/app.js"></script>
 </body>

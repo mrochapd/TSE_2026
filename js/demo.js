@@ -19,7 +19,7 @@
     ['sp', 'SÃO PAULO', 34.7, 0.45, 'SÃO PAULO'], ['se', 'SERGIPE', 1.7, 0.63, 'ARACAJU'],
     ['to', 'TOCANTINS', 1.1, 0.51, 'PALMAS'], ['zz', 'EXTERIOR', 0.7, 0.55, null]
   ];
-  const EXTERIOR = ['LISBOA', 'MIAMI', 'TÓQUIO', 'BOSTON', 'NAGOYA', 'LONDRES', 'NOVA YORK', 'BUENOS AIRES'];
+  const EXTERIOR = ['LISBOA', 'MIAMI', 'TÓQUIO', 'BOSTON', 'NAGÓIA', 'LONDRES', 'NOVA YORK', 'BUENOS AIRES', 'PARIS', 'MADRI', 'ASSUNÇÃO', 'TORONTO'];
   const DURACAO = 6 * 60 * 1000; // apuração simulada completa em ~6 min
   let inicio = Date.now();
 
