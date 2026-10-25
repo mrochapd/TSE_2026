@@ -18,24 +18,20 @@ jobs:
           baixar() { echo; echo "=== $1"; code=$(curl -sS -A "Mozilla/5.0" -o "$2" -w "%{http_code}" "$1"); echo "HTTP $code  bytes $(wc -c < "$2")"; }
           resumo() { jq -c '{chaves: keys, dg, hg, dt, ht, and, s, e, v, cand: [.. | objects | select(has("cand")) | .cand[]? | {n, nmu, nm, vap, pvap, sqcand, st, e}]}' "$1" 2>&1 | head -c 2500; echo; }
 
-          baixar $B/comum/config/ele-c.json elec.json
-          jq -c '[.. | objects | select(.cd? == "6258" or .cd? == 6258)]' elec.json | head -c 800; echo
-          jq -c 'keys' elec.json; jq -r '.c // empty' elec.json
-
-          baixar $B/ele2026/$E/config/mun-$C-cm.json cm.json
-          jq -c 'keys' cm.json
-          jq -c '[.abr[] | {cd, ds, n: (.mu | length)}]' cm.json | head -c 3000; echo
-          echo "--- primeiro estado, 2 municípios:"; jq -c '.abr[0] | (del(.mu)), .mu[0:2]' cm.json
-          echo "--- exterior:"; jq -c '.abr[] | select((.cd | ascii_downcase) == "zz") | (del(.mu)), (.mu | length), .mu[0:6]' cm.json
-          ZZMU=$(jq -r '.abr[] | select((.cd | ascii_downcase) == "zz") | .mu[0].cd' cm.json)
-          ZZNOMES=$(jq -r '[.abr[] | select((.cd | ascii_downcase) == "zz") | .mu[].nm] | join(" | ")' cm.json)
-          echo "--- nomes das cidades do exterior:"; echo "$ZZNOMES"
-
-          baixar $B/ele2026/$E/dados/br/br-c0001-$C-u.json br.json; resumo br.json
-          baixar $B/ele2026/$E/dados/sp/sp-c0001-$C-u.json sp.json; resumo sp.json
-          baixar $B/ele2026/$E/dados/zz/zz-c0001-$C-u.json zz.json; resumo zz.json; head -c 600 zz.json; echo
-          baixar $B/ele2026/$E/dados/zz/zz$ZZMU-c0001-$C-u.json zzmu.json; resumo zzmu.json; head -c 600 zzmu.json; echo
-          baixar $B/ele2026/$E/dados/zz/zz-$C-ab.json zzab.json; jq -c 'keys, (.abr | length), .abr[0:3]' zzab.json 2>&1 | head -c 1500; echo
-          baixar $B/ele2026/$E/dados/br/br-$C-ab.json brab.json; jq -c 'keys, (.abr | length), [.abr[] | .cdabr]' brab.json 2>&1 | head -c 1500; echo
+          curto() { jq -c '{dg, hg, and, s: {ts: .s.ts, st: .s.st}, e: {te: .e.te, c: .e.c}, v: {vv: .v.vv}, cand: [.. | objects | select(has("cand")) | .cand[]? | {n, vap}]}' "$1" 2>&1 | head -c 600; echo; }
+          for i in 1 2; do
+            baixar $B/ele2026/$E/dados/br/br-c0001-$C-u.json br.json; curto br.json
+            baixar $B/ele2026/$E/dados/zz/zz-c0001-$C-u.json zz.json; curto zz.json
+            baixar "$B/ele2026/$E/dados/zz/zz-c0001-$C-u.json?t=$(date +%s)" zzq.json; curto zzq.json
+            baixar $B/ele2026/$E/dados/zz/zz30457-c0001-$C-u.json ams.json; curto ams.json
+            baixar $B/ele2026/$E/dados/sp/sp-c0001-$C-u.json sp.json; curto sp.json
+            baixar $B/ele2026/$E/dados/zz/zz-$C-ab.json zzab.json
+            echo "cidades do exterior com seções apuradas no índice:"; jq -c '[.abr[] | select((.s.st | tonumber) > 0) | {cdabr, st: .s.st, ts: .s.ts, c: .e.c}] | length, .[0:5]' zzab.json
+            jq -c '{dg, hg}' zzab.json
+            baixar $B/ele2026/$E/dados/br/br-$C-ab.json brab.json
+            jq -c '{dg, hg}, [.abr[] | select(.cdabr == "zz" or .cdabr == "br" or .cdabr == "sp") | {cdabr, and, dt, ht, st: .s.st, ts: .s.ts, c: .e.c}]' brab.json
+            sleep 20
+          done
+          baixar $B/ele2026/$E/fotos/br/280002542548.jpeg foto.jpg; file foto.jpg
           echo "--- cabeçalhos CORS do arquivo do exterior:"
           curl -sS -I -H "Origin: https://mrochapd.github.io" $B/ele2026/$E/dados/zz/zz-c0001-$C-u.json | grep -i -E "^(HTTP|access-control|cache-control|content-type)"
