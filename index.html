@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apuração 2026 · Presidente</title>
+  <meta name="description" content="Acompanhe a apuração do 2º turno da eleição presidencial de 2026 (Lula x Flávio Bolsonaro) por Brasil, estado, município, zona eleitoral e exterior, com dados oficiais do TSE.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='16' height='32' fill='%23d62839'/%3E%3Crect x='16' width='16' height='32' fill='%231f5fbf'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-inner">
+      <div class="marca">
+        <span class="marca-icone" aria-hidden="true"><i></i><i></i></span>
+        <div>
+          <h1>Apuração 2026</h1>
+          <p class="marca-sub">Presidente · <span id="turno-label">2º turno</span></p>
+        </div>
+      </div>
+      <div class="status" id="status" aria-live="polite">
+        <span class="status-ponto" id="status-ponto"></span>
+        <span id="status-texto">Conectando ao TSE…</span>
+        <button class="botao-icone" id="btn-atualizar" type="button" title="Atualizar agora" aria-label="Atualizar agora">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="aviso" id="aviso" hidden></div>
+
+  <main class="conteudo">
+    <!-- Seletor de abrangência -->
+    <section class="cartao seletor" aria-label="Escolha a região">
+      <div class="abas" role="tablist" aria-label="Abrangência">
+        <button type="button" role="tab" class="aba" data-aba="br" aria-selected="true">
+          <span aria-hidden="true">🇧🇷</span> Brasil
+        </button>
+        <button type="button" role="tab" class="aba" data-aba="uf" aria-selected="false">
+          <span aria-hidden="true">📍</span> Estados
+        </button>
+        <button type="button" role="tab" class="aba" data-aba="zz" aria-selected="false">
+          <span aria-hidden="true">🌎</span> Exterior
+        </button>
+      </div>
+      <div class="filtros" id="filtros">
+        <label class="campo" id="campo-uf">
+          <span>Estado</span>
+          <select id="sel-uf"><option value="">Selecione o estado</option></select>
+        </label>
+        <label class="campo" id="campo-mu">
+          <span id="rotulo-mu">Município</span>
+          <input id="busca-mu" list="lista-mu" placeholder="Digite para buscar…" autocomplete="off" disabled>
+          <datalist id="lista-mu"></datalist>
+        </label>
+        <label class="campo" id="campo-zona">
+          <span>Zona eleitoral</span>
+          <select id="sel-zona" disabled><option value="">Todas as zonas</option></select>
+        </label>
+      </div>
+      <nav class="trilha" id="trilha" aria-label="Você está em"></nav>
+    </section>
+
+    <!-- Placar principal -->
+    <section class="cartao placar" aria-labelledby="titulo-local">
+      <div class="placar-cabecalho">
+        <div>
+          <p class="sobretitulo">Resultado em</p>
+          <h2 id="titulo-local">Brasil</h2>
+        </div>
+        <div class="apuradas">
+          <div class="apuradas-num"><strong id="pct-urnas">0,00%</strong> das urnas apuradas</div>
+          <div class="progresso" role="progressbar" aria-label="Urnas apuradas" aria-valuemin="0" aria-valuemax="100" id="progresso-urnas"><span id="barra-urnas"></span></div>
+          <div class="apuradas-det" id="det-urnas">—</div>
+        </div>
+      </div>
+
+      <div class="duelo">
+        <div class="duelo-rotulos">
+          <div class="rot rot-lula"><span class="num">13</span> Lula <small>PT</small></div>
+          <div class="rot rot-flavio">Flávio Bolsonaro <small>PL</small> <span class="num">22</span></div>
+        </div>
+        <div class="barra-duelo" id="barra-duelo" role="img" aria-label="Distribuição dos votos válidos">
+          <div class="seg seg-lula" id="seg-lula"><span id="seg-lula-pct"></span></div>
+          <div class="seg seg-flavio" id="seg-flavio"><span id="seg-flavio-pct"></span></div>
+          <div class="marca-meio" aria-hidden="true"><span>50%</span></div>
+        </div>
+        <div class="duelo-votos">
+          <span id="votos-lula-barra">0 votos</span>
+          <span id="dif-votos" class="dif"></span>
+          <span id="votos-flavio-barra">0 votos</span>
+        </div>
+      </div>
+
+      <div class="candidatos">
+        <article class="cand cand-lula" id="cand-lula">
+          <div class="foto"><img id="foto-lula" alt="Foto de Lula" hidden><span class="iniciais" aria-hidden="true">L</span></div>
+          <div class="cand-info">
+            <div class="cand-nome-linha">
+              <h3>Lula</h3>
+              <strong class="cand-pct" id="pct-lula">0,00%</strong>
+            </div>
+            <p class="cand-partido">PT · 13</p>
+            <p class="cand-votos"><span id="votos-lula">0</span> votos</p>
+            <span class="selo" id="selo-lula" hidden></span>
+          </div>
+        </article>
+        <article class="cand cand-flavio" id="cand-flavio">
+          <div class="foto"><img id="foto-flavio" alt="Foto de Flávio Bolsonaro" hidden><span class="iniciais" aria-hidden="true">F</span></div>
+          <div class="cand-info">
+            <div class="cand-nome-linha">
+              <h3>Flávio Bolsonaro</h3>
+              <strong class="cand-pct" id="pct-flavio">0,00%</strong>
+            </div>
+            <p class="cand-partido">PL · 22</p>
+            <p class="cand-votos"><span id="votos-flavio">0</span> votos</p>
+            <span class="selo" id="selo-flavio" hidden></span>
+          </div>
+        </article>
+      </div>
+
+      <dl class="numeros">
+        <div><dt>Eleitorado</dt><dd id="n-eleitorado">—</dd></div>
+        <div><dt>Comparecimento</dt><dd id="n-comparecimento">—</dd></div>
+        <div><dt>Abstenção</dt><dd id="n-abstencao">—</dd></div>
+        <div><dt>Votos válidos</dt><dd id="n-validos">—</dd></div>
+        <div><dt>Brancos</dt><dd id="n-brancos">—</dd></div>
+        <div><dt>Nulos</dt><dd id="n-nulos">—</dd></div>
+      </dl>
+      <p class="fonte">Fonte: Tribunal Superior Eleitoral (TSE) · <span id="hora-tse">—</span></p>
+    </section>
+
+    <!-- Mapa -->
+    <section class="cartao mapa-cartao" aria-labelledby="titulo-mapa">
+      <div class="mapa-cabecalho">
+        <div>
+          <h2 id="titulo-mapa">Onde cada candidato venceu</h2>
+          <p class="sub" id="sub-mapa">Toque ou clique em um estado para ver os detalhes.</p>
+        </div>
+        <div class="legenda" aria-label="Legenda do mapa">
+          <div class="legenda-linha">
+            <span class="legenda-nome">Lula</span>
+            <span class="escala" id="escala-lula"></span>
+          </div>
+          <div class="legenda-linha">
+            <span class="legenda-nome">Flávio</span>
+            <span class="escala" id="escala-flavio"></span>
+          </div>
+          <div class="legenda-faixas"><span>50%</span><span>55%</span><span>60%</span><span>70%+</span></div>
+          <div class="legenda-linha legenda-sem"><span class="quad"></span> Sem votos apurados</div>
+        </div>
+      </div>
+      <div class="mapa-area">
+        <div class="mapa" id="mapa"></div>
+        <div class="mapa-placar" id="mapa-placar"></div>
+      </div>
+      <p class="mapa-carregando" id="mapa-carregando" hidden></p>
+    </section>
+
+    <!-- Tabela detalhada -->
+    <section class="cartao tabela-cartao" aria-labelledby="titulo-tabela">
+      <div class="tabela-cabecalho">
+        <h2 id="titulo-tabela">Resultado por estado</h2>
+        <input type="search" id="filtro-tabela" placeholder="Filtrar…" aria-label="Filtrar tabela">
+      </div>
+      <div class="tabela-rolagem">
+        <table class="tabela" id="tabela">
+          <thead>
+            <tr>
+              <th data-ord="nome" scope="col">Local</th>
+              <th data-ord="lulaPct" scope="col" class="c-lula">Lula</th>
+              <th scope="col" class="c-barra" aria-label="Comparação"></th>
+              <th data-ord="flavioPct" scope="col" class="c-flavio">Flávio</th>
+              <th data-ord="pst" scope="col" class="c-num">Apurado</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-corpo"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <p>Dados oficiais de <a href="https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados" target="_blank" rel="noopener">resultados.tse.jus.br</a>, atualizados automaticamente a cada 30 segundos. Site independente, sem vínculo com o TSE ou com as campanhas.</p>
+    <p class="rodape-mini">Mapa dos estados: @svg-maps/brazil (CC BY 4.0) · Mapas municipais: IBGE.</p>
+  </footer>
+
+  <div class="dica" id="dica" role="tooltip" hidden></div>
+
+  <script src="js/mapa-brasil.js"></script>
+  <script src="js/tse.js"></script>
+  <script src="js/demo.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
