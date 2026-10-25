@@ -357,10 +357,12 @@
       dv.style.color = l ? 'var(--lula)' : 'var(--flavio)';
     }
 
-    $('pct-lula').textContent = pct(lula.pct);
-    $('pct-flavio').textContent = pct(flavio.pct);
-    $('votos-lula').textContent = n(lula.votos);
-    $('votos-flavio').textContent = n(flavio.votos);
+    // Sem votos por candidato publicados (exterior com arquivo desatualizado): mostra "—", não 0%.
+    $('pct-lula').textContent = r.semVotos ? '—' : pct(lula.pct);
+    $('pct-flavio').textContent = r.semVotos ? '—' : pct(flavio.pct);
+    $('votos-lula').textContent = r.semVotos ? '—' : n(lula.votos);
+    $('votos-flavio').textContent = r.semVotos ? '—' : n(flavio.votos);
+    if (r.semVotos) { $('votos-lula-barra').textContent = '— votos'; $('votos-flavio-barra').textContent = '— votos'; }
 
     const v = vencedor(r);
     const completo = r.secoes.total > 0 && r.secoes.apuradas >= r.secoes.total;
@@ -396,8 +398,19 @@
       (r.calculado ? ' · total do exterior calculado como total do Brasil menos a soma dos estados, porque o arquivo do exterior no TSE está desatualizado' : '');
 
     // País/cidade do exterior zerados enquanto o exterior já tem votos: o TSE ainda não atualizou esses arquivos.
+    const aviso = $('aviso-dados');
     const ext = S.sel.uf === 'zz' && (S.sel.pais || S.sel.mu) ? exteriorTotal() : null;
-    $('aviso-dados').hidden = !(ext && ext.secoes.apuradas > 0 && !r.secoes.apuradas);
+    if (r.semVotos) {
+      aviso.textContent = `O TSE já registra ${n(r.secoes.apuradas)} de ${n(r.secoes.total)} seções apuradas no exterior, ` +
+        'mas ainda não atualizou o arquivo com os votos de cada candidato no exterior. ' +
+        'Os percentuais aparecem aqui sozinhos assim que o TSE publicar.';
+      aviso.hidden = false;
+    } else if (ext && ext.secoes.apuradas > 0 && !r.secoes.apuradas) {
+      aviso.innerHTML = 'O TSE ainda não publicou os votos por país e cidade do exterior: os arquivos dessas cidades continuam ' +
+        'zerados. O andamento do exterior aparece em <a href="#/zz">Exterior › Todos os países</a>. ' +
+        'Quando o TSE publicar, os números aparecem aqui sozinhos.';
+      aviso.hidden = false;
+    } else aviso.hidden = true;
   }
 
   function mostrarFoto(k) {
